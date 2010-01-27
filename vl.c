@@ -223,6 +223,7 @@ int ctrl_grab = 0;
 unsigned int nb_prom_envs = 0;
 const char *prom_envs[MAX_PROM_ENVS];
 int boot_menu;
+extern int enable_gl;
 
 int nb_numa_nodes;
 uint64_t node_mem[MAX_NODES];
@@ -1407,6 +1408,7 @@ typedef struct QEMUOption {
     uint32_t arch_mask;
 } QEMUOption;
 
+
 static const QEMUOption qemu_options[] = {
     { "h", 0, QEMU_OPTION_h, QEMU_ARCH_ALL },
 #define DEF(option, opt_arg, opt_enum, opt_help, arch_mask)     \
@@ -2437,6 +2439,9 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_enable_kvm:
                 kvm_allowed = 1;
+                break;
+            case QEMU_OPTION_enable_gl:
+                enable_gl = 1;
                 break;
             case QEMU_OPTION_usb:
                 usb_enabled = 1;
