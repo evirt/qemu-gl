@@ -40,6 +40,7 @@
 /* XXX: This may be wrong for 64-bit ILP32 hosts.  */
 typedef void * host_reg_t;
 
+#ifndef _STDIO_H
 #ifdef CONFIG_BSD
 typedef struct __sFILE FILE;
 #else
@@ -48,6 +49,7 @@ typedef struct FILE FILE;
 extern int fprintf(FILE *, const char *, ...);
 extern int fputs(const char *, FILE *);
 extern int printf(const char *, ...);
+#endif
 
 #if defined(__i386__)
 #define AREG0 "ebp"
