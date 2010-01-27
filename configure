@@ -568,6 +568,10 @@ for opt do
   ;;
   --enable-kvm) kvm="yes"
   ;;
+  --disable-gl) gl="no"
+  ;;
+  --enable-gl) gl="yes"
+  ;;
   --enable-profiler) profiler="yes"
   ;;
   --enable-cocoa)
@@ -1982,6 +1986,7 @@ echo "IO thread         $io_thread"
 echo "Linux AIO support $linux_aio"
 echo "Install blobs     $blobs"
 echo "KVM support       $kvm"
+echo "GL passthrough    $gl"
 echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 echo "fdatasync         $fdatasync"
@@ -2505,6 +2510,9 @@ case "$target_arch2" in
     if test "$xen" = "yes" -a "$target_softmmu" = "yes" ; then
       echo "CONFIG_XEN=y" >> $config_target_mak
     fi
+    if test "$gl" = "yes" ; then
+      cflags="-DTARGET_OPENGL_OK $cflags "
+    fi
 esac
 case "$target_arch2" in
   i386|x86_64|ppcemb|ppc|ppc64|s390x)
@@ -2665,7 +2673,12 @@ if test "$target_softmmu" = "yes" ; then
   arm)
     cflags="-DHAS_AUDIO $cflags"
   ;;
-  i386|mips|ppc)
+  i386)
+    if test "$gl" = "yes" ; then
+      cflags="-DHAS_AUDIO -DHAS_AUDIO_CHOICE -DTARGET_OPENGL_OK $cflags "
+    fi
+  ;;
+  mips|ppc)
     cflags="-DHAS_AUDIO -DHAS_AUDIO_CHOICE $cflags"
   ;;
   esac

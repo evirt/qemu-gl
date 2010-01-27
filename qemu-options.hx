@@ -1803,6 +1803,17 @@ Enable KVM full virtualization support. This option is only available
 if KVM support is enabled when compiling.
 ETEXI
 
+#ifdef TARGET_OPENGL_OK
+DEF("enable-gl", 0, QEMU_OPTION_enable_gl, \
+    "-enable-gl     enable OpenGL passthrough support\n")
+#endif
+STEXI
+@item -enable-gl
+Enable OpenGL passthrough support. This option requires the support of a
+special libGL installed on the guest OS.
+ETEXI
+
+
 #ifdef CONFIG_XEN
 DEF("xen-domid", HAS_ARG, QEMU_OPTION_xen_domid,
     "-xen-domid id   specify xen guest domain id\n")

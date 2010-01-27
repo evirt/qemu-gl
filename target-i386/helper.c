@@ -912,7 +912,7 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
     }
 
     page_offset = (addr & TARGET_PAGE_MASK) & (page_size - 1);
-    paddr = (pte & TARGET_PAGE_MASK) + page_offset;
+    paddr = (pte & PHYS_ADDR_MASK) + page_offset;
     return paddr;
 }
 

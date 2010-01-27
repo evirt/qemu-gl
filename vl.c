@@ -244,6 +244,7 @@ unsigned int nb_prom_envs = 0;
 const char *prom_envs[MAX_PROM_ENVS];
 #endif
 int boot_menu;
+extern int enable_gl;
 
 int nb_numa_nodes;
 uint64_t node_mem[MAX_NODES];
@@ -3061,6 +3062,7 @@ typedef struct QEMUOption {
     int index;
 } QEMUOption;
 
+
 static const QEMUOption qemu_options[] = {
     { "h", 0, QEMU_OPTION_h },
 #define DEF(option, opt_arg, opt_enum, opt_help)        \
@@ -3070,7 +3072,6 @@ static const QEMUOption qemu_options[] = {
 #undef DEF
 #undef DEFHEADING
 #undef GEN_DOCS
-    { NULL },
 };
 
 #ifdef HAS_AUDIO
@@ -4357,6 +4358,13 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_enable_kvm:
                 kvm_allowed = 1;
                 break;
+#endif
+#ifdef TARGET_OPENGL_OK
+            case QEMU_OPTION_enable_gl:
+                enable_gl = 1;
+                break;
+#else
+#error oops! no GL
 #endif
             case QEMU_OPTION_usb:
                 usb_enabled = 1;
