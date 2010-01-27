@@ -63,6 +63,8 @@ static SDL_PixelFormat host_format;
 static int scaling_active = 0;
 static Notifier mouse_mode_notifier;
 
+extern void opengl_exec_set_parent_window(Display* _dpy, Window _parent_window);
+
 static void sdl_update(DisplayState *ds, int x, int y, int w, int h)
 {
     //    printf("updating x=%d y=%d w=%d h=%d\n", x, y, w, h);
@@ -103,7 +105,9 @@ static void sdl_setdata(DisplayState *ds)
 
 static void do_sdl_resize(int new_width, int new_height, int bpp)
 {
+    SDL_SysWMinfo info;
     int flags;
+    static Display *dpy;
 
     //    printf("resizing to %d %d\n", w, h);
 
@@ -120,6 +124,13 @@ static void do_sdl_resize(int new_width, int new_height, int bpp)
 	fprintf(stderr, "Could not open SDL display (%dx%dx%d): %s\n", width, 
 		height, bpp, SDL_GetError());
         exit(1);
+    }
+
+    SDL_GetWMInfo(&info);
+    if (info.subsystem == SDL_SYSWM_X11 && info.info.x11.display &&
+                    (!dpy || dpy == info.info.x11.display)) {
+        dpy = info.info.x11.display;
+        opengl_exec_set_parent_window(dpy, info.info.x11.window);
     }
 }
 
@@ -816,6 +827,7 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
 {
     int flags;
     uint8_t data = 0;
+    SDL_SysWMinfo info;
     DisplayAllocator *da;
     const SDL_VideoInfo *vi;
 
@@ -843,6 +855,13 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
                 SDL_GetError());
         exit(1);
     }
+
+    SDL_GetWMInfo(&info);
+    if (info.subsystem == SDL_SYSWM_X11 && info.info.x11.display)
+        opengl_exec_set_parent_window(info.info.x11.display,
+                        RootWindow(info.info.x11.display,
+                                DefaultScreen(info.info.x11.display)));
+
     vi = SDL_GetVideoInfo();
     host_format = *(vi->vfmt);
 
@@ -880,4 +899,9 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
         gui_fullscreen_initial_grab = 1;
         sdl_grab_start();
     }
+
+    SDL_GetWMInfo(&info);
+    if (info.subsystem == SDL_SYSWM_X11 && info.info.x11.display)
+        opengl_exec_set_parent_window(info.info.x11.display,
+                        info.info.x11.window);
 }

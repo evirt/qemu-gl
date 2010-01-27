@@ -56,6 +56,11 @@ endif
 libobj-$(CONFIG_NEED_MMU) += mmu.o
 libobj-$(TARGET_ARM) += neon_helper.o iwmmxt_helper.o
 
+ifeq ($(TARGET_BASE_ARCH), i386)
+libobj-y+=helper_opengl.o opengl_exec.o
+endif
+
+# NOTE: the disassembler code is only needed for debugging
 libobj-y += disas.o
 
 $(libobj-y): $(GENERATED_HEADERS)
@@ -75,6 +80,21 @@ op_helper.o cpu-exec.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 # Note: this is a workaround. The real fix is to avoid compiling
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
+
+GL_CFLAGS := -Wall -g -O0 -fno-strict-aliasing
+parse_gl_h: parse_gl_h.c
+	$(HOST_CC) -g -o $@ $<
+server_stub.c: parse_gl_h
+	./parse_gl_h
+gl_func.h: parse_gl_h
+	./parse_gl_h
+opengl_func.h: gl_func.h
+helper_opengl.o: helper_opengl.c opengl_func.h server_stub.c
+	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH) -DNEED_CPU_H
+gl_beginend.h: $(TARGET_PATH)/beginend_funcs.sh
+	$< > $@
+opengl_exec.o : opengl_exec.c server_stub.c opengl_func.h gl_beginend.h
+	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I. -I$(TARGET_PATH)
 
 #########################################################
 # Linux user emulator target
@@ -313,7 +333,7 @@ endif # CONFIG_SOFTMMU
 obj-$(CONFIG_GDBSTUB_XML) += gdbstub-xml.o
 
 $(QEMU_PROG): $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y)
-	$(call LINK,$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y))
+	$(call LINK,$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y)) -lGL -lGLU
 
 
 gdbstub-xml.c: $(TARGET_XML_FILES) $(SRC_PATH)/feature_to_c.sh
@@ -326,6 +346,7 @@ clean:
 	rm -f *.o *.a *~ $(PROGS) nwfpe/*.o fpu/*.o
 	rm -f *.d */*.d tcg/*.o ide/*.o
 	rm -f qemu-monitor.h gdbstub-xml.c
+	rm -f gl_beginend.h gl_func.h parse_gl_h libGL.so server_stub.c
 
 install: all
 ifneq ($(PROGS),)
