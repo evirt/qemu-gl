@@ -1153,15 +1153,21 @@ int main(int argc, char* argv[])
   FILE* client_stub = fopen("client_stub.c", "w");
   FILE* server_stub = fopen("server_stub.c", "w");
 
-  fprintf(header, "/* This is a generated file. DO NOT EDIT ! */\n\n");
+  fprintf(header, "/* This is a generated file by parse_gl_h.c - DO NOT EDIT ! */\n\n");
+  fprintf(header, "union gl_ret_type {\n"
+    "const char *s;\n"
+    "int i;\n"
+    "char c;\n"
+    "};\n");
+
   fprintf(header, "#define COMPOSE(x,y) x##y\n");
   fprintf(header, "#define MAGIC_MACRO(x)  COMPOSE(x,_func)\n");
   fprintf(header, "enum {\n"
                   "#include \"gl_func_perso.h\"\n");
 
-  fprintf(client_stub, "/* This is a generated file. DO NOT EDIT ! */\n\n");
+  fprintf(client_stub, "/* This is a generated file by parse_gl_h.c - DO NOT EDIT ! */\n\n");
 
-  fprintf(server_stub, "/* This is a generated file. DO NOT EDIT ! */\n\n");
+  fprintf(server_stub, "/* This is a generated file by parse_gl_h.c - DO NOT EDIT ! */\n\n");
 
   int i;
   for(i=0;i<funcDescCount;i++)
@@ -1262,7 +1268,7 @@ int main(int argc, char* argv[])
   fprintf(header, "  GL_N_CALLS\n};\n");
 
 
-  fprintf(server_stub, "void execute_func(int func_number, arg_t *args, int *pret_int, char *pret_char)\n");
+  fprintf(server_stub, "void execute_func(int func_number, arg_t *args, union gl_ret_type *pret)\n");
   fprintf(server_stub, "{\n");
   fprintf(server_stub, "  switch(func_number)\n");
   fprintf(server_stub, "  {\n");
@@ -1402,10 +1408,10 @@ int main(int argc, char* argv[])
         ;
       else if (strcmp(get_type_string(funcDesc[i].type), "TYPE_INT") == 0 ||
                strcmp(get_type_string(funcDesc[i].type), "TYPE_UNSIGNED_INT") == 0)
-        fprintf(server_stub, "*pret_int = ");
+        fprintf(server_stub, "pret->i = ");
       else if (strcmp(get_type_string(funcDesc[i].type), "TYPE_CHAR") == 0 ||
                strcmp(get_type_string(funcDesc[i].type), "TYPE_UNSIGNED_CHAR") == 0)
-        fprintf(server_stub, "*pret_char = ");
+        fprintf(server_stub, "pret->c = ");
       else
       {
         fprintf(stderr, "unknown ret type = %s\n", get_type_string(funcDesc[i].type));

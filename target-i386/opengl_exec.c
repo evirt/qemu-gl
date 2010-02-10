@@ -403,15 +403,14 @@ static inline void cmd_buffer_replay(ProcessStruct *process)
 {
     Signature *sig;
     int func_number;
-    int ret_int;
-    char ret_char;
+    union gl_ret_type ret;
     arg_t *call = process->cmdbuf;
 
     while (process->bufstart) {
         func_number = *call ++;
         sig = (Signature *) tab_opengl_calls[func_number];
 
-        execute_func(func_number, call, &ret_int, &ret_char);
+        execute_func(func_number, call, &ret);
 
         call += sig->nb_args;
         process->bufstart -= sig->nb_args + 1;
@@ -1159,12 +1158,12 @@ void do_context_switch(Display *dpy, pid_t pid, int call)
 
 int do_function_call(int func_number, arg_t *args, char *ret_string)
 {
-    char ret_char = 0;
-    int ret_int = 0;
-    const char *ret_str = NULL;
+    union gl_ret_type ret;
     Display *dpy = process->dpy;
     Signature *signature = (Signature *) tab_opengl_calls[func_number];
     int ret_type = signature->ret_type;
+
+    ret.s = NULL;
 
     if (parent_dpy)
         dpy = parent_dpy;
@@ -1210,7 +1209,7 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
         break;
 
     case _synchronize_func:
-        ret_int = 1;
+        ret.i = 1;
         break;
 
     case _exit_process_func:
@@ -1371,38 +1370,38 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
     case glXWaitGL_func:
         {
             glXWaitGL();
-            ret_int = 0;
+            ret.i = 0;
             break;
         }
 
     case glXWaitX_func:
         {
             glXWaitX();
-            ret_int = 0;
+            ret.i = 0;
             break;
         }
 
     case glXChooseVisual_func:
         {
-            ret_int = glXChooseVisualFunc(dpy, (int *) args[2]);
+            ret.i = glXChooseVisualFunc(dpy, (int *) args[2]);
             break;
         }
 
     case glXQueryExtensionsString_func:
         {
-            ret_str = glXQueryExtensionsString(dpy, 0);
+            ret.s = glXQueryExtensionsString(dpy, 0);
             break;
         }
 
     case glXQueryServerString_func:
         {
-            ret_str = glXQueryServerString(dpy, 0, args[2]);
+            ret.s = glXQueryServerString(dpy, 0, args[2]);
             break;
         }
 
     case glXGetClientString_func:
         {
-            ret_str = glXGetClientString(dpy, args[1]);
+            ret.s = glXGetClientString(dpy, args[1]);
             break;
         }
 
@@ -1410,7 +1409,7 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
         {
             GET_EXT_PTR(const char *, glXGetScreenDriver, (Display *, int));
 
-            ret_str = ptr_func_glXGetScreenDriver(dpy, 0);
+            ret.s = ptr_func_glXGetScreenDriver(dpy, 0);
             break;
         }
 
@@ -1418,7 +1417,7 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
         {
             GET_EXT_PTR(const char *, glXGetDriverConfig, (const char *));
 
-            ret_str = ptr_func_glXGetDriverConfig((const char *) args[0]);
+            ret.s = ptr_func_glXGetDriverConfig((const char *) args[0]);
             break;
         }
 
@@ -1454,12 +1453,12 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                 set_association_fakecontext_visual(process, fake_ctxt, vis);
                 set_association_fakecontext_glxcontext(process,
                                 fake_ctxt, ctxt);
-                ret_int = fake_ctxt;
+                ret.i = fake_ctxt;
 
                 _create_context(process, ctxt, fake_ctxt, shareList,
                                 fake_shareList);
             } else {
-                ret_int = 0;
+                ret.i = 0;
             }
 
             break;
@@ -1472,7 +1471,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, GLXFBConfig, int, GLXContext, int));
             int client_fbconfig = args[1];
 
-            ret_int = 0;
+            ret.i = 0;
             GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig) {
@@ -1485,7 +1484,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                                 dpy, fbconfig, args[2], shareList, args[4]);
                 set_association_fakecontext_glxcontext(
                                 process, fake_ctxt, ctxt);
-                ret_int = fake_ctxt;
+                ret.i = fake_ctxt;
 
                 _create_context(process, ctxt, fake_ctxt, shareList,
                                 fake_shareList);
@@ -1592,13 +1591,13 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
 
     case glXQueryVersion_func:
         {
-            ret_int = glXQueryVersion(dpy, (int *) args[1], (int *) args[2]);
+            ret.i = glXQueryVersion(dpy, (int *) args[1], (int *) args[2]);
             break;
         }
 
     case glGetString_func:
         {
-            ret_str = (char *) glGetString(args[0]);
+            ret.s = (char *) glGetString(args[0]);
             break;
         }
 
@@ -1614,7 +1613,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (void *) client_drawable, fake_ctxt);
 
             if (client_drawable == 0 && fake_ctxt == 0) {
-                ret_int = glXMakeCurrent(dpy, 0, NULL);
+                ret.i = glXMakeCurrent(dpy, 0, NULL);
                 process->current_state = &process->default_state;
             } else if ((drawable = (GLXDrawable)
                                     get_association_fakepbuffer_pbuffer(
@@ -1624,15 +1623,15 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                 if (ctxt == NULL) {
                     fprintf(stderr, "invalid fake_ctxt (%d) (*)!\n",
                                     fake_ctxt);
-                    ret_int = 0;
+                    ret.i = 0;
                 } else
-                    ret_int = glXMakeCurrent(dpy, drawable, ctxt);
+                    ret.i = glXMakeCurrent(dpy, drawable, ctxt);
             } else {
                 GLXContext ctxt = get_association_fakecontext_glxcontext(
                                 process, fake_ctxt);
                 if (ctxt == NULL) {
                     fprintf(stderr, "invalid fake_ctxt (%d)!\n", fake_ctxt);
-                    ret_int = 0;
+                    ret.i = 0;
                 } else {
                     drawable = get_association_clientdrawable_serverdrawable(
                                     process, client_drawable);
@@ -1660,11 +1659,11 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                                         client_drawable, drawable);
                     }
 
-                    ret_int = glXMakeCurrent(dpy, drawable, ctxt);
+                    ret.i = glXMakeCurrent(dpy, drawable, ctxt);
                 }
             }
 
-            if (ret_int) {
+            if (ret.i) {
                 for (i = 0; i < process->nb_states; i ++) {
                     if (process->glstates[i]->fake_ctxt == fake_ctxt) {
                         /* HACK !!! REMOVE */
@@ -1782,9 +1781,9 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                 get_association_fakecontext_glxcontext(process, fake_ctxt);
             if (ctxt == NULL) {
                 fprintf(stderr, "invalid fake_ctxt (%x) !\n", fake_ctxt);
-                ret_char = False;
+                ret.c = False;
             } else {
-                ret_char = glXIsDirect(dpy, ctxt);
+                ret.c = glXIsDirect(dpy, ctxt);
             }
             break;
         }
@@ -1798,7 +1797,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                 vis = get_visual_info_from_visual_id(dpy, visualid);
             if (vis == NULL)
                 vis = get_default_visual(dpy);
-            ret_int = glXGetConfig(dpy, vis, args[2], (int *) args[3]);
+            ret.i = glXGetConfig(dpy, vis, args[2], (int *) args[3]);
             break;
         }
 
@@ -1831,7 +1830,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
 
     case glXQueryExtension_func:
         {
-            ret_int =
+            ret.i =
                 glXQueryExtension(dpy, (int *) args[1], (int *) args[2]);
             break;
         }
@@ -1842,7 +1841,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, int, int *, int *));
             if (process->nfbconfig == MAX_FBCONFIG) {
                 *(int *) args[3] = 0;
-                ret_int = 0;
+                ret.i = 0;
             } else {
                 GLXFBConfig *fbconfigs =
                     ptr_func_glXChooseFBConfig(dpy, args[1], (int *) args[2],
@@ -1852,11 +1851,11 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                     process->fbconfigs_max[process->nfbconfig] =
                         *(int *) args[3];
                     process->nfbconfig++;
-                    ret_int = 1 + process->nfbconfig_total;
+                    ret.i = 1 + process->nfbconfig_total;
                     process->nfbconfig_total +=
                         process->fbconfigs_max[process->nfbconfig];
                 } else {
-                    ret_int = 0;
+                    ret.i = 0;
                 }
             }
             break;
@@ -1868,7 +1867,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, int, int *, int *));
             if (process->nfbconfig == MAX_FBCONFIG) {
                 *(int *) args[3] = 0;
-                ret_int = 0;
+                ret.i = 0;
             } else {
                 GLXFBConfigSGIX *fbconfigs =
                     ptr_func_glXChooseFBConfigSGIX(dpy, args[1],
@@ -1879,11 +1878,11 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                     process->fbconfigs_max[process->nfbconfig] =
                         *(int *) args[3];
                     process->nfbconfig++;
-                    ret_int = 1 + process->nfbconfig_total;
+                    ret.i = 1 + process->nfbconfig_total;
                     process->nfbconfig_total +=
                         process->fbconfigs_max[process->nfbconfig];
                 } else {
-                    ret_int = 0;
+                    ret.i = 0;
                 }
             }
             break;
@@ -1895,7 +1894,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, int, int *));
             if (process->nfbconfig == MAX_FBCONFIG) {
                 *(int *) args[2] = 0;
-                ret_int = 0;
+                ret.i = 0;
             } else {
                 GLXFBConfig *fbconfigs =
                     ptr_func_glXGetFBConfigs(dpy, args[1], (int *) args[2]);
@@ -1904,11 +1903,11 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                     process->fbconfigs_max[process->nfbconfig] =
                         *(int *) args[2];
                     process->nfbconfig++;
-                    ret_int = 1 + process->nfbconfig_total;
+                    ret.i = 1 + process->nfbconfig_total;
                     process->nfbconfig_total +=
                         process->fbconfigs_max[process->nfbconfig];
                 } else {
-                    ret_int = 0;
+                    ret.i = 0;
                 }
             }
             break;
@@ -1920,7 +1919,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, GLXFBConfig, int *));
             int client_fbconfig = args[1];
 
-            ret_int = 0;
+            ret.i = 0;
             GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig) {
@@ -1936,7 +1935,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                     fprintf(stderr,
                             "set_association_fakepbuffer_pbuffer(%p, %x)\n",
                             fake_pbuffer, (int) (long) pbuffer);
-                    ret_int = (int) (long) fake_pbuffer;
+                    ret.i = (int) (long) fake_pbuffer;
                 }
             }
             break;
@@ -1948,7 +1947,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, GLXFBConfig, int, int, int *));
             int client_fbconfig = args[1];
 
-            ret_int = 0;
+            ret.i = 0;
             GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig) {
@@ -1961,7 +1960,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
 
                     set_association_fakepbuffer_pbuffer(
                                     process, fake_pbuffer, pbuffer);
-                    ret_int = (int) (long) fake_pbuffer;
+                    ret.i = (int) (long) fake_pbuffer;
                 }
             }
             break;
@@ -2069,9 +2068,9 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                 fprintf(stderr,
                         "glXBindTexImageARB : invalid fake_pbuffer (%p) !\n",
                         fake_pbuffer);
-                ret_int = 0;
+                ret.i = 0;
             } else {
-                ret_int = ptr_func_glXBindTexImageARB(dpy, pbuffer, args[2]);
+                ret.i = ptr_func_glXBindTexImageARB(dpy, pbuffer, args[2]);
             }
             break;
         }
@@ -2091,9 +2090,9 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                 fprintf(stderr,
                         "glXReleaseTexImageARB : invalid fake_pbuffer (%p) !\n",
                         fake_pbuffer);
-                ret_int = 0;
+                ret.i = 0;
             } else {
-                ret_int =
+                ret.i =
                     ptr_func_glXReleaseTexImageARB(dpy, pbuffer, args[2]);
             }
             break;
@@ -2105,11 +2104,11 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, GLXFBConfig, int, int *));
             int client_fbconfig = args[1];
 
-            ret_int = 0;
+            ret.i = 0;
             GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig)
-                ret_int =
+                ret.i =
                     ptr_func_glXGetFBConfigAttrib(dpy, fbconfig, args[2],
                                                   (int *) args[3]);
             break;
@@ -2145,11 +2144,11 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, GLXFBConfigSGIX, int, int *));
             int client_fbconfig = args[1];
 
-            ret_int = 0;
+            ret.i = 0;
             GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig)
-                ret_int =
+                ret.i =
                     ptr_func_glXGetFBConfigAttribSGIX(dpy,
                                                       (GLXFBConfigSGIX)
                                                       fbconfig, args[2],
@@ -2169,9 +2168,9 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                 get_association_fakecontext_glxcontext(process, fake_ctxt);
             if (ctxt == NULL) {
                 fprintf(stderr, "invalid fake_ctxt (%i) !\n", fake_ctxt);
-                ret_int = 0;
+                ret.i = 0;
             } else {
-                ret_int =
+                ret.i =
                     ptr_func_glXQueryContext(dpy, ctxt, args[2],
                                              (int *) args[3]);
             }
@@ -2207,11 +2206,11 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, GLXFBConfigSGIX, int, int *));
             int client_fbconfig = args[1];
 
-            ret_int = 0;
+            ret.i = 0;
             GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig)
-                ret_int = ptr_func_glXQueryGLXPbufferSGIX(dpy,
+                ret.i = ptr_func_glXQueryGLXPbufferSGIX(dpy,
                                 (GLXFBConfigSGIX) fbconfig,
                                 args[2], (int *) args[3]);
             break;
@@ -2223,7 +2222,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, GLXFBConfigSGIX, int, GLXContext, int));
             int client_fbconfig = args[1];
 
-            ret_int = 0;
+            ret.i = 0;
             GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig) {
@@ -2236,7 +2235,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                                 shareList, args[4]);
                 set_association_fakecontext_glxcontext(
                                 process, fake_ctxt, ctxt);
-                ret_int = fake_ctxt;
+                ret.i = fake_ctxt;
             }
             break;
         }
@@ -2247,13 +2246,13 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                         (Display *, GLXFBConfig));
             int client_fbconfig = args[1];
 
-            ret_int = 0;
+            ret.i = 0;
             GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig) {
                 XVisualInfo *vis =
                     ptr_func_glXGetVisualFromFBConfig(dpy, fbconfig);
-                ret_int = (vis) ? vis->visualid : 0;
+                ret.i = (vis) ? vis->visualid : 0;
                 if (vis) {
                     tabAssocAttribListVisual =
                         realloc(tabAssocAttribListVisual,
@@ -2268,7 +2267,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                     nTabAssocAttribListVisual++;
                 }
                 if (display_function_call)
-                    fprintf(stderr, "visualid = %d\n", ret_int);
+                    fprintf(stderr, "visualid = %d\n", ret.i);
             }
             break;
         }
@@ -2277,7 +2276,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
         {
             GET_EXT_PTR(int, glXSwapIntervalSGI, (int));
 
-            ret_int = ptr_func_glXSwapIntervalSGI(args[0]);
+            ret.i = ptr_func_glXSwapIntervalSGI(args[0]);
             break;
         }
 
@@ -2285,7 +2284,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
         {
             if (display_function_call)
                 fprintf(stderr, "%s\n", (char *) args[0]);
-            ret_int = glXGetProcAddressARB((const GLubyte *) args[0]) != NULL;
+            ret.i = glXGetProcAddressARB((const GLubyte *) args[0]) != NULL;
             break;
         }
 
@@ -2423,9 +2422,9 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
             unsigned int server_texture =
                 get_server_texture(process, client_texture);
             if (server_texture)
-                ret_char = ptr_func_glIsTexture(server_texture);
+                ret.c = ptr_func_glIsTexture(server_texture);
             else
-                ret_char = 0;
+                ret.c = 0;
             break;
         }
 
@@ -2477,9 +2476,9 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
             unsigned int server_list = get_server_list(process, client_list);
 
             if (server_list)
-                ret_char = glIsList(server_list);
+                ret.c = glIsList(server_list);
             else
-                ret_char = 0;
+                ret.c = 0;
             break;
         }
 
@@ -2647,9 +2646,9 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
             unsigned int server_buffer =
                 get_server_buffer(process, client_buffer);
             if (server_buffer)
-                ret_int = ptr_func_glIsBufferARB(server_buffer);
+                ret.i = ptr_func_glIsBufferARB(server_buffer);
             else
-                ret_int = 0;
+                ret.i = 0;
             break;
         }
 
@@ -3766,9 +3765,9 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
 
             if (src_ptr) {
                 memcpy(dst_ptr, src_ptr, size);
-                ret_int = ptr_func_glUnmapBufferARB(target);
+                ret.i = ptr_func_glUnmapBufferARB(target);
             } else {
-                ret_int = 0;
+                ret.i = 0;
             }
             break;
         }
@@ -3867,9 +3866,9 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
     case glGetError_func:
         {
 #ifdef SYSTEMATIC_ERROR_CHECK
-            ret_int = process->current_state->last_error;
+            ret.i = process->current_state->last_error;
 #else
-            ret_int = glGetError();
+            ret.i = glGetError();
 #endif
             break;
         }
@@ -3878,7 +3877,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
         {
             GET_EXT_PTR(int, glNewObjectBufferATI, (int, void *, int));
 
-            ret_int = ptr_func_glNewObjectBufferATI(args[0],
+            ret.i = ptr_func_glNewObjectBufferATI(args[0],
                             (void *) args[1], args[2]);
             break;
         }
@@ -3896,7 +3895,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
         break;
 
     default:
-        execute_func(func_number, args, &ret_int, &ret_char);
+        execute_func(func_number, args, &ret);
         break;
     }
 
@@ -3914,20 +3913,15 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
 
     switch (ret_type) {
     case TYPE_NONE:
-        break;
-
     case TYPE_CHAR:
     case TYPE_UNSIGNED_CHAR:
-        ret_int = ret_char;
-        break;
-
     case TYPE_INT:
     case TYPE_UNSIGNED_INT:
         break;
 
     case TYPE_CONST_CHAR:
         {
-            strncpy(ret_string, (ret_str) ? ret_str : "", 32768);
+            strncpy(ret_string, (ret.s) ? ret.s : "", 32768);
             break;
         }
 
@@ -3941,5 +3935,5 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
         fprintf(stderr, "[%d]< %s\n", process->instr_counter,
                 tab_opengl_calls_name[func_number]);
 
-    return ret_int;
+    return ret.i;
 }
