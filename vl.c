@@ -3072,6 +3072,7 @@ static const QEMUOption qemu_options[] = {
 #undef DEF
 #undef DEFHEADING
 #undef GEN_DOCS
+    { NULL },
 };
 
 #ifdef HAS_AUDIO
@@ -3752,6 +3753,8 @@ int main(int argc, char **argv, char **envp)
 #endif
     int show_vnc_port = 0;
     int defconfig = 1;
+//    extern int _Xdebug;
+//    _Xdebug=1;
 
     error_set_progname(argv[0]);
 
