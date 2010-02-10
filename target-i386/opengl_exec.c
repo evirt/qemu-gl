@@ -153,49 +153,32 @@ void opengl_exec_set_parent_window(Display *_dpy, Window _parent_window)
                         active_win_y);
 }
 
-static int local_connection = 0;
-void opengl_exec_set_local_connection()
-{
-    local_connection = 1;
-}
-
-static GLXDrawable create_window(Display *dpy, Window local_parent_window,
+static GLXDrawable create_window(Display *dpy,
                 XVisualInfo *vis, const char *name,
                 int x, int y, int width, int height)
 {
     int scrnum;
     XSetWindowAttributes attr = { 0 };
     unsigned long mask;
-    Window root;
     Window win;
 
     scrnum = DefaultScreen(dpy);
-    root = RootWindow(dpy, scrnum);
 
     /* window attributes */
     attr.background_pixel = 0xff000000;
     attr.border_pixel = 0;
-    attr.colormap = XCreateColormap(dpy, root, vis->visual, AllocNone);
+    attr.colormap = XCreateColormap(dpy, qemu_parent_window, vis->visual, AllocNone);
     attr.event_mask = 0; /* StructureNotifyMask | ExposureMask | KeyPressMask */
     attr.save_under = True;
-    // if (local_parent_window == NULL && qemu_parent_window == NULL)
     attr.override_redirect = True;
-    // else
-    // attr.override_redirect = True;
     attr.cursor = None;
     mask =
         CWBackPixel | CWBorderPixel | CWColormap | CWEventMask |
         CWOverrideRedirect | CWSaveUnder;
 
-    if (local_parent_window)
-        win = XCreateWindow(dpy, local_parent_window, 0, 0, width, height, 0,
-                        vis->depth, InputOutput, vis->visual, mask, &attr);
-    else if (qemu_parent_window)
+    if (qemu_parent_window)
         win = XCreateWindow(dpy, qemu_parent_window, 0, 0, width, height, 0,
                         vis->depth, InputOutput, vis->visual, mask, &attr);
-    else
-        win = XCreateWindow(dpy, root, 0, 0, width, height, 0, vis->depth,
-                        InputOutput, vis->visual, mask, &attr);
 
 	fprintf(stderr, "Created window: %08x\n", (unsigned int)win);
 
@@ -1640,21 +1623,10 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
                                         process, fake_ctxt);
                         if (vis == NULL)
                             vis = get_default_visual(dpy);
-                        /* if (local_connection) drawable = client_drawable;
-                         * else */
-                        {
-                            if ((int) (long) client_drawable ==
-                                            RootWindow(dpy, 0) &&
-                                            local_connection) {
-                                drawable = (GLXDrawable) client_drawable;
-                            } else {
-                                drawable = create_window(
-                                                dpy, local_connection ?
-                                                (Window) client_drawable :
-                                                0, vis, "", 0, 0, 16, 16);
-                            }
-                        }
-			fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)drawable, (unsigned long int)client_drawable);
+                        drawable = create_window(dpy, vis, "", 0, 0, 16, 16);
+
+                        fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)drawable, (unsigned long int)client_drawable);
+
                         set_association_clientdrawable_serverdrawable(process,
                                         client_drawable, drawable);
                     }
