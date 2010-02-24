@@ -24,6 +24,8 @@
 #include "9p.h"
 #endif
 
+#define VIRTIO_ID_GL 6
+
 /* from Linux's linux/virtio_config.h */
 
 /* Status byte for guest to report progress, and synchronize features. */
@@ -194,7 +196,7 @@ VirtIODevice *virtio_balloon_init(DeviceState *dev);
 #ifdef CONFIG_LINUX
 VirtIODevice *virtio_9p_init(DeviceState *dev, V9fsConf *conf);
 #endif
-
+VirtIODevice *virtio_gl_init(DeviceState *dev);
 
 void virtio_net_exit(VirtIODevice *vdev);
 void virtio_blk_exit(VirtIODevice *vdev);
