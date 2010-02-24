@@ -644,7 +644,6 @@ static int virtio_9p_init_pci(PCIDevice *pci_dev)
 {
     VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
     VirtIODevice *vdev;
-
     vdev = virtio_9p_init(&pci_dev->qdev, &proxy->fsconf);
     virtio_init_pci(proxy, vdev,
                     PCI_VENDOR_ID_REDHAT_QUMRANET,
@@ -655,6 +654,21 @@ static int virtio_9p_init_pci(PCIDevice *pci_dev)
     return 0;
 }
 #endif
+
+static int virtio_gl_init_pci(PCIDevice *pci_dev)
+{
+    VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
+    VirtIODevice *vdev;
+
+    vdev = virtio_gl_init(&pci_dev->qdev);
+    virtio_init_pci(proxy, vdev,
+                    PCI_VENDOR_ID_REDHAT_QUMRANET,
+                    PCI_DEVICE_ID_VIRTIO_GL,
+                    PCI_CLASS_OTHERS,
+                    0x00);
+
+    return 0;
+}
 
 static PCIDeviceInfo virtio_info[] = {
     {
@@ -722,6 +736,15 @@ static PCIDeviceInfo virtio_info[] = {
         },
     }, {
 #endif
+	.qdev.name = "virtio-gl-pci",
+        .qdev.size = sizeof(VirtIOPCIProxy),
+        .init      = virtio_gl_init_pci,
+        .exit      = virtio_exit_pci,
+        .qdev.props = (Property[]) {
+            DEFINE_PROP_END_OF_LIST(),
+        },
+        .qdev.reset = virtio_pci_reset,
+    },{
         /* end of list */
     }
 };
