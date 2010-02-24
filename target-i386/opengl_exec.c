@@ -37,7 +37,7 @@
 #include <mesa_gl.h>
 #include <mesa_glx.h>
 
-// TODO
+// FIXME - probably breaks badly on 32 bit host w/ 64 bit guest
 typedef long unsigned int target_phys_addr_t;
 
 #include "opengl_func.h"
@@ -49,6 +49,7 @@ typedef long unsigned int target_phys_addr_t;
 
 //#define SYSTEMATIC_ERROR_CHECK
 //#define BUFFER_BEGINEND
+
 #define glGetError() 0
 
 #define GET_EXT_PTR(type, funcname, args_decl) \
@@ -153,10 +154,9 @@ void opengl_exec_set_parent_window(Display *_dpy, Window _parent_window)
                         active_win_y);
 }
 
-static GLXDrawable create_window(Display *dpy,
-                XVisualInfo *vis, const char *name,
-                int x, int y, int width, int height)
+static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
 {
+    int x=0, y=0, width=16, height=16;
     int scrnum;
     XSetWindowAttributes attr = { 0 };
     unsigned long mask;
@@ -180,8 +180,6 @@ static GLXDrawable create_window(Display *dpy,
         win = XCreateWindow(dpy, qemu_parent_window, 0, 0, width, height, 0,
                         vis->depth, InputOutput, vis->visual, mask, &attr);
 
-	fprintf(stderr, "Created window: %08x\n", (unsigned int)win);
-
     /* set hints and properties */
     {
         XSizeHints sizehints;
@@ -192,7 +190,7 @@ static GLXDrawable create_window(Display *dpy,
         sizehints.height = height;
         sizehints.flags = USSize | USPosition;
         XSetWMNormalHints(dpy, win, &sizehints);
-        XSetStandardProperties(dpy, win, name, name, None,
+        XSetStandardProperties(dpy, win, "", "", None,
                         (char **) NULL, 0, &sizehints);
     }
 
@@ -954,6 +952,7 @@ static GLuint translate_id(GLsizei n, GLenum type, const GLvoid *list)
         ubptr = ((GLubyte *) list) + 4 * n;
         return (GLuint) *ubptr * 16777216 + (GLuint) *(ubptr + 1) * 65536 +
             (GLuint) *(ubptr + 2) * 256 + (GLuint) *(ubptr + 3);
+  //FIXMEIM (use better constants)
     default:
         return 0;
     }
@@ -1030,8 +1029,6 @@ void do_disconnect_current(void)
             ptr_func_glXDestroyPbuffer(dpy, pbuffer);
     }
 
-//goto a;
-//b:
     for (i = 0; i < MAX_ASSOC_SIZE && process->
                     association_clientdrawable_serverdrawable[i].key; i ++) {
         Window win = (Window) process->
@@ -1044,10 +1041,11 @@ void do_disconnect_current(void)
 //FIXMEIM - the crasher is here somewhere.
         if (active_win == win)
             active_win = 0;
-//goto a;
-//b:
+
         XDestroyWindow(dpy, win);
-        int loop = 1; // 1;
+
+#if 1
+        int loop = 1;
         while (loop) {
             while (XPending(dpy) > 0) {
                 XEvent event;
@@ -1064,10 +1062,10 @@ void do_disconnect_current(void)
             }
             break; /* TODO */
         }
-    }
-//goto c;
+#endif
 
-//a:
+    }
+
     for (i = 0; i < process->nb_states; i++) {
         destroy_gl_state(process->glstates[i]);
         free(process->glstates[i]);
@@ -1081,9 +1079,6 @@ void do_disconnect_current(void)
     for (i = 0; &processes[i] != process; i ++);
     memmove(&processes[i], &processes[i + 1],
                     (MAX_HANDLED_PROCESS - 1 - i) * sizeof(ProcessStruct));
-//goto b;
-//c:
-//return;
 }
 
 static const int beginend_allowed[GL_N_CALLS] = {
@@ -1096,6 +1091,11 @@ void do_context_switch(Display *dpy, pid_t pid, int call)
 {
     int i;
 
+    /* Lookup a process stuct. If there isnt one associated with this pid
+     * then we create one.
+     * process->current_state contains info on which of the guests contexts is
+     * current.
+     */
     for (i = 0; i < MAX_HANDLED_PROCESS; i ++)
         if (processes[i].process_id == pid) {
             process = &processes[i];
@@ -1119,20 +1119,12 @@ void do_context_switch(Display *dpy, pid_t pid, int call)
     case _init64_func:
     case _exit_process_func:
     case glXMakeCurrent_func:
-        /* Do nothing */
+        /* Do nothing. In the case of glXMakeCurrent_func this avoids doing
+           two calls to glXMakeCurrent() on the host because the context
+           switch happens before the function call is processed */
         break;
 
     default:
-#if 0
-        glFlush();
-        glFinish();
-        glXSwapBuffers(dpy, drawable);
-        if (process->current_state == &process->default_state)
-            /* Where do commands like glViewport go when no drawable or
-             * context are current - i.e. after a call to
-             * glXMakeCurrent(dpy, 0, 0) ? */;
-        else
-#endif
             glXMakeCurrent(dpy, process->current_state->drawable,
                             process->current_state->context);
     }
@@ -1144,16 +1136,17 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
     Display *dpy = process->dpy;
     Signature *signature = (Signature *) tab_opengl_calls[func_number];
     int ret_type = signature->ret_type;
+    arg_t *tmp_args = args;
 
     ret.s = NULL;
 
-    if (parent_dpy)
-        dpy = parent_dpy;
-
-    process->instr_counter++;
-    if (display_function_call)
-        fprintf(stderr, "[%d]> %s\n", process->instr_counter,
+    if (display_function_call) {
+        fprintf(stderr, "[%d]> %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
+	while(*tmp_args) {
+		fprintf(stderr, " + %08x\n", *tmp_args++);
+        }
+    }
 
 #ifdef BUFFER_BEGINEND
     if (process->began) {
@@ -1182,12 +1175,9 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
     }
 #endif
 
+
     switch (func_number) {
     case -1:
-        break;
-
-    case _init_func:
-        *(int *) args[1] = 1;
         break;
 
     case _synchronize_func:
@@ -1274,6 +1264,8 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
 //                            params[0], params[1], params[2], params[3]);
                     XMoveResizeWindow(dpy, drawable, params[0], params[1],
                                       params[2], params[3]);
+
+#if 0
                     int loop = 0;       // = 1
 
                     while (loop) {
@@ -1293,6 +1285,7 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
                             }
                         }
                     }
+#endif
                     /* The window should have resized by now, but force the
                      * new size anyway.  */
                     _get_window_pos(dpy, drawable, &pos);
@@ -1427,13 +1420,14 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
                 ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
                 vis->visualid = saved_visualid;
             }
+fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
             if (ctxt) {
                 int fake_ctxt =++ process->next_available_context_number;
 
                 set_association_fakecontext_visual(process, fake_ctxt, vis);
-                set_association_fakecontext_glxcontext(process,
-                                fake_ctxt, ctxt);
+                set_association_fakecontext_glxcontext(process, fake_ctxt,
+                                                       ctxt);
                 ret.i = fake_ctxt;
 
                 _create_context(process, ctxt, fake_ctxt, shareList,
@@ -1586,7 +1580,7 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
         {
             int i;
             ClientGLXDrawable client_drawable = to_drawable(args[1]);
-            GLXDrawable drawable = 0;
+            GLXDrawable host_drawable = 0;
             int fake_ctxt = (int) args[2];
 
             if (display_function_call)
@@ -1594,11 +1588,19 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
                         (void *) client_drawable, fake_ctxt);
 
             if (client_drawable == 0 && fake_ctxt == 0) {
+
+                /* Release context */
+
                 ret.i = glXMakeCurrent(dpy, 0, NULL);
                 process->current_state = &process->default_state;
-            } else if ((drawable = (GLXDrawable)
+            } else if ((host_drawable = (GLXDrawable)
                                     get_association_fakepbuffer_pbuffer(
                                             process, client_drawable))) {
+
+                /* Lookup context if we have a valid drawable in the form of
+                 * a pixel buffer (pbuffer).
+                 * If it exists, use it. */
+
                 GLXContext ctxt = get_association_fakecontext_glxcontext(
                                 process, fake_ctxt);
                 if (ctxt == NULL) {
@@ -1606,30 +1608,33 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
                                     fake_ctxt);
                     ret.i = 0;
                 } else
-                    ret.i = glXMakeCurrent(dpy, drawable, ctxt);
+                    ret.i = glXMakeCurrent(dpy, host_drawable, ctxt);
             } else {
+
+                /* Create an ordinary drawable if we have a valid context */
+
                 GLXContext ctxt = get_association_fakecontext_glxcontext(
                                 process, fake_ctxt);
                 if (ctxt == NULL) {
                     fprintf(stderr, "invalid fake_ctxt (%d)!\n", fake_ctxt);
                     ret.i = 0;
                 } else {
-                    drawable = get_association_clientdrawable_serverdrawable(
+                    host_drawable = get_association_clientdrawable_serverdrawable(
                                     process, client_drawable);
-                    if (drawable == 0) {
+                    if (host_drawable == 0) {
                         XVisualInfo *vis = get_association_fakecontext_visual(
                                         process, fake_ctxt);
                         if (vis == NULL)
                             vis = get_default_visual(dpy);
-                        drawable = create_window(dpy, vis, "", 0, 0, 16, 16);
+                        host_drawable = create_window(dpy, vis);
 
-                        fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)drawable, (unsigned long int)client_drawable);
+                        fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)host_drawable, (unsigned long int)client_drawable);
 
                         set_association_clientdrawable_serverdrawable(process,
-                                        client_drawable, drawable);
+                                        client_drawable, host_drawable);
                     }
 
-                    ret.i = glXMakeCurrent(dpy, drawable, ctxt);
+                    ret.i = glXMakeCurrent(dpy, host_drawable, ctxt);
                 }
             }
 
@@ -1638,14 +1643,14 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
                     if (process->glstates[i]->fake_ctxt == fake_ctxt) {
                         /* HACK !!! REMOVE */
                         process->current_state = process->glstates[i];
-                        process->current_state->drawable = drawable;
+                        process->current_state->drawable = host_drawable;
                         break;
                     }
                 }
 
                 if (i == process->nb_states) {
                     fprintf(stderr, "error remembering the new context\n");
-//                    exit(-1);
+                    exit(-1);
                 }
             }
             break;
@@ -3902,7 +3907,7 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
     }
 
     if (display_function_call)
-        fprintf(stderr, "[%d]< %s\n", process->instr_counter,
+        fprintf(stderr, "[%d]< %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
 
     return ret.i;
