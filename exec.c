@@ -439,7 +439,8 @@ static PhysPageDesc *phys_page_find_alloc(target_phys_addr_t index, int alloc)
     return pd + (index & (L2_SIZE - 1));
 }
 
-static inline PhysPageDesc *phys_page_find(target_phys_addr_t index)
+PhysPageDesc *phys_page_find(target_phys_addr_t index);
+/*static inline*/ PhysPageDesc *phys_page_find(target_phys_addr_t index)
 {
     return phys_page_find_alloc(index, 0);
 }
