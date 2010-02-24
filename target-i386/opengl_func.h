@@ -1,6 +1,4 @@
 /*
- *  Main header for both host and guest sides
- *
  *  Copyright (c) 2006,2007 Even Rouault
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
