@@ -49,8 +49,6 @@ void helper_opengl(void)
 extern void init_process_tab(void);
 extern int do_function_call(int func_number, arg_t *args, char *ret_string);
 
-extern void sdl_set_opengl_window(int x, int y, int width, int height);
-
 static int last_process_id = 0;
 static int must_save = 0;
 #if 0
@@ -108,7 +106,7 @@ static /*inline*/ void *get_phys_mem_addr(CPUState *env, target_ulong addr)
         return (void *) addr + env->tlb_table[mmu_idx][index].addend;
 }
 #else
-
+#if 0
 typedef struct PhysPageDesc {
     /* offset in host memory of the page + io_index in the low bits */
     ram_addr_t phys_offset;
@@ -145,6 +143,7 @@ static /*inline*/ void *get_phys_mem_addr(CPUState *env, target_ulong vaddr)
 
 }
 	
+#endif
 
 #endif
 
@@ -239,18 +238,29 @@ static const void *get_host_read_pointer(CPUState *env,
 //    } else if (ret == MAPPED_CONTIGUOUS) {
 //        return get_phys_mem_addr(env, target_addr);
 //    } else {
-        static int host_mem_size = 0;
-        static void *host_mem = NULL;
+//        static int host_mem_size = 0;
+//        static void *host_mem = NULL;
         static void *ret;
+//        void *new_mem = NULL;
 
-        if (host_mem_size < host_offset + len) {
-            host_mem_size = 2 * host_mem_size + host_offset + len;
-            host_mem = realloc(host_mem, host_mem_size);
-        }
-        ret = host_mem + host_offset;
-        if(cpu_memory_rw_debug(env, target_addr, ret, len, 0))
+//        if (host_mem_size < host_offset + len) {
+//            host_mem_size = 2 * host_mem_size + host_offset + len;
+//            host_mem_size += len;
+//            new_mem = realloc(host_mem, host_mem_size);
+//		if(!host_mem)
+//			host_mem = new_mem;
+//		if(host_mem != new_mem){
+//			fprintf(stderr, "Fucked, give up\n");
+//			exit(1);
+//		}
+//        }
+//        ret = host_mem + host_offset;
+	ret = malloc(len);
+        if(cpu_memory_rw_debug(env, target_addr, ret, len, 0)) {
+		fprintf(stderr, "mapping FAIL\n");
 		return NULL;
-        host_offset += len;
+	}
+//        host_offset += len;
         return ret;
 //    }
 }
@@ -586,6 +596,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
 
         ret = 0;
     } else {
+////////////////////////////////////// One-at-a-time calls here 
 #ifdef ENABLE_GL_LOG
         if (is_logging(pid))
             write_gl_debug_cmd_short(func_number);
@@ -673,7 +684,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
 
               CASE_OUT_POINTERS:
                 {
-                    int mem_state;
+//                    int mem_state;
 
 #ifdef ENABLE_GL_LOG
                     if (is_logging(pid))
@@ -721,6 +732,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
  //FIXME - we should not have to copy here once we get shm working.
                     saved_out_ptr[i] = args[i];
                     if (args[i]) {
+			fprintf(stderr, "Alloc_args: %d\n", args_size[i]);
                         args[i] = (arg_t) malloc(args_size[i]);
                     }
                     break;
@@ -813,6 +825,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                             disconnect_current();
                             return 0;
                         }
+			fprintf(stderr, "(un)Alloc_args: %d\n", args_size[i]);
                         free((void *) args[i]);
                     }
                     break;
