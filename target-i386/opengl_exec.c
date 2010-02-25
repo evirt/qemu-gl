@@ -37,7 +37,7 @@
 #include <mesa_gl.h>
 #include <mesa_glx.h>
 
-// TODO
+// FIXME - probably breaks badly on 32 bit host w/ 64 bit guest
 typedef long unsigned int target_phys_addr_t;
 
 #include "opengl_func.h"
@@ -1145,6 +1145,7 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
     Display *dpy = process->dpy;
     Signature *signature = (Signature *) tab_opengl_calls[func_number];
     int ret_type = signature->ret_type;
+    arg_t *tmp_args = args;
 
     ret.s = NULL;
 
@@ -1152,9 +1153,13 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
         dpy = parent_dpy;
 
     process->instr_counter++;
-    if (display_function_call)
+    if (display_function_call) {
         fprintf(stderr, "[%d]> %s\n", process->instr_counter,
                 tab_opengl_calls_name[func_number]);
+	while(*tmp_args) {
+		fprintf(stderr, " + %08x\n", *tmp_args++);
+        }
+    }
 
 #ifdef BUFFER_BEGINEND
     if (process->began) {
