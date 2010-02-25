@@ -1045,7 +1045,7 @@ void do_disconnect_current(void)
 
         XDestroyWindow(dpy, win);
 
-#if 0
+#if 1
         int loop = 1;
         while (loop) {
             while (XPending(dpy) > 0) {
@@ -1180,10 +1180,6 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
     }
 #endif
 
-
-    if(!strncmp("glX", tab_opengl_calls_name[func_number], 3)) {
-	printf("func_number: %d %s\n", func_number, tab_opengl_calls_name[func_number]);
-    }
 
     switch (func_number) {
     case -1:
