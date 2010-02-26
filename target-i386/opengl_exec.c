@@ -1185,10 +1185,6 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
     case -1:
         break;
 
-    case _init_func:
-        *(int *) args[1] = 1;
-        break;
-
     case _synchronize_func:
         ret.i = 1;
         break;
@@ -1429,7 +1425,7 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
                 ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
                 vis->visualid = saved_visualid;
             }
-fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", ctxt, dpy, vis);
+fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
             if (ctxt) {
                 int fake_ctxt =++ process->next_available_context_number;
