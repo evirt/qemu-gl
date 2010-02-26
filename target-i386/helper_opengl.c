@@ -42,122 +42,10 @@ void helper_opengl(void)
 
 #include "opengl_func.h"
 
-#define ENABLE_GL_LOG
-
-//extern FILE *stderr;
-
 extern void init_process_tab(void);
 extern int do_function_call(int func_number, arg_t *args, char *ret_string);
 
 static int last_process_id = 0;
-static int must_save = 0;
-#if 0
-#error DEATH!
-static /*inline*/ void *get_phys_mem_addr(CPUState *env, target_ulong addr)
-{
-    int mmu_idx;
-    int index;
-	int i;
-
-    index = (addr >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
-    mmu_idx = cpu_mmu_index(env);
-
-//    fprintf(stderr, "addr: %x", addr);    
-//    if (unlikely(mmu_idx != MMU_USER_IDX))
-//        fprintf(stderr, " - not in userland !!!\n");
-//    fprintf(stderr, "\n");    
-
-    if (__builtin_expect
-        (env->tlb_table[mmu_idx][index].addr_code !=
-         (addr & TARGET_PAGE_MASK), 0)) {
-        target_ulong ret = cpu_get_phys_page_debug((CPUState *) env, addr);
-
-        if (ret == -1) {
-            fprintf(stderr,
-                    "not in phys mem " TARGET_FMT_lx "(" TARGET_FMT_lx " "
-                    TARGET_FMT_lx ")\n", addr,
-                    env->tlb_table[mmu_idx][index].addr_code,
-                    addr & TARGET_PAGE_MASK);
-            fprintf(stderr, "cpu_x86_handle_mmu_fault = %d\n",
-                    cpu_x86_handle_mmu_fault((CPUState *) env, addr, 0, mmu_idx, 1));
-            return NULL;
-        } else {
-            if (ret + TARGET_PAGE_SIZE <= ram_size) {
-                return qemu_get_ram_ptr((ret + (((target_ulong) addr) & (TARGET_PAGE_SIZE - 1))));
-            } else {
-                fprintf(stderr,
-                        "cpu_get_phys_page_debug(env, " TARGET_FMT_lx ") == "
-                        TARGET_FMT_lx "\n", addr, ret);
-                fprintf(stderr,
-                        "ram_size= " TARGET_FMT_lx "\n", ret, (target_ulong) ram_size);
-
-	for(i = 0 ; i < ram_size-10 ; i++) {
-		char *ptr = qemu_get_ram_ptr(i);
-		if(!strncmp("dizzyb00bs", ptr, 10)) {
-			fprintf(stderr, "found boobs at: %lx %lx\n", i, ptr);
-			break;
-		}
-	}
-
-                return qemu_get_ram_ptr(i-128);
-            }
-        }
-    } else
-        return (void *) addr + env->tlb_table[mmu_idx][index].addend;
-}
-#else
-#if 0
-typedef struct PhysPageDesc {
-    /* offset in host memory of the page + io_index in the low bits */
-    ram_addr_t phys_offset;
-    ram_addr_t region_offset;
-} PhysPageDesc;
-
-PhysPageDesc *phys_page_find(target_phys_addr_t index);
-
-static /*inline*/ void *get_phys_mem_addr(CPUState *env, target_ulong vaddr)
-{
-	target_ulong page;
-	target_phys_addr_t phys_page_addr;
-	PhysPageDesc *p;
-	unsigned long pd;
-
-	page = vaddr & TARGET_PAGE_MASK;
-	phys_page_addr = cpu_get_phys_page_debug(env, page);
-
-	if (phys_page_addr == -1) {
-		fprintf(stderr, "Ohshit\n");
-		return NULL;
-	}
-
-	p = phys_page_find(phys_page_addr >> TARGET_PAGE_BITS);
-
-	if(!p) {
-		fprintf(stderr, "Ohshit ^2\n");
-                return NULL;
-        }
-
-	pd = p->phys_offset;
-
-	return qemu_get_ram_ptr((pd & TARGET_PAGE_MASK) + (vaddr & ~TARGET_PAGE_MASK));
-
-}
-	
-#endif
-
-#endif
-
-#ifndef MIN
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-
-enum {
-    NOT_MAPPED,
-    MAPPED_CONTIGUOUS,
-    MAPPED_NOT_CONTIGUOUS
-};
-
-#define TARGET_ADDR_LOW_ALIGN(x)  ((target_ulong)(x) & ~(TARGET_PAGE_SIZE - 1))
 
 static int argcpy_target_to_host_1_1(CPUState *env, void *host_addr,
                                      target_ulong target_addr, int nb_args)
@@ -182,7 +70,7 @@ static void disconnect_current(void)
     return do_disconnect_current();
 }
 
-static inline int argcpy_target32_to_host(CPUState *env, void *host_addr,
+static int argcpy_target32_to_host(CPUState *env, void *host_addr,
                                    target_ulong target_addr, int nb_args)
 {
     uint32_t args_temp[nb_args], *src = args_temp;
@@ -229,95 +117,17 @@ static void reset_host_offset()
 static const void *get_host_read_pointer(CPUState *env,
                 target_ulong target_addr, int len)
 {
-//	int ret;
-
-//    ret = get_target_mem_state(env, target_addr, len);
-
-//    if (ret == NOT_MAPPED) {
-//        return NULL;
-//    } else if (ret == MAPPED_CONTIGUOUS) {
-//        return get_phys_mem_addr(env, target_addr);
-//    } else {
-//        static int host_mem_size = 0;
-//        static void *host_mem = NULL;
-        static void *ret;
-//        void *new_mem = NULL;
-
-//        if (host_mem_size < host_offset + len) {
-//            host_mem_size = 2 * host_mem_size + host_offset + len;
-//            host_mem_size += len;
-//            new_mem = realloc(host_mem, host_mem_size);
-//		if(!host_mem)
-//			host_mem = new_mem;
-//		if(host_mem != new_mem){
-//			fprintf(stderr, "Fucked, give up\n");
-//			exit(1);
-//		}
-//        }
-//        ret = host_mem + host_offset;
-	ret = malloc(len);
+	// FIXMEIM - HUGE memory leak here
+	void *ret = malloc(len);
         if(cpu_memory_rw_debug(env, target_addr, ret, len, 0)) {
 		fprintf(stderr, "mapping FAIL\n");
 		return NULL;
 	}
-//        host_offset += len;
         return ret;
-//    }
 }
 
 int doing_opengl = 0;
 static int last_func_number = -1;
-
-#ifdef ENABLE_GL_LOG
-static FILE *f = NULL;
-static int logger_pid = 0;
-
-#define write_gl_debug_init() do { if (f == NULL) f = fopen("/tmp/debug_gl.bin", "wb"); } while(0)
-
-void write_gl_debug_cmd_int(int my_int)
-{
-    write_gl_debug_init();
-    fwrite(&my_int, sizeof(int), 1, f);
-    fflush(f);
-}
-
-void write_gl_debug_cmd_short(short my_int)
-{
-    write_gl_debug_init();
-    fwrite(&my_int, sizeof(short), 1, f);
-    fflush(f);
-}
-
-static void inline write_gl_debug_cmd_buffer_with_size(int size, void *buffer)
-{
-    write_gl_debug_init();
-    fwrite(&size, sizeof(int), 1, f);
-    if (size)
-        fwrite(buffer, size, 1, f);
-}
-
-static void inline write_gl_debug_cmd_buffer_without_size(
-                int size, void *buffer)
-{
-    write_gl_debug_init();
-    if (size)
-        fwrite(buffer, size, 1, f);
-}
-
-void write_gl_debug_end(void)
-{
-    write_gl_debug_init();
-    fclose(f);
-    f = NULL;
-    logger_pid = 0;
-    must_save = 0;
-}
-
-static inline int is_logging(int pid)
-{
-    return must_save && pid == logger_pid;
-}
-#endif
 
 #include <dlfcn.h>
 #include <signal.h>
@@ -426,7 +236,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             return 0;
         }
 
-////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
         args_size =
             (int *) get_host_read_pointer(env, in_args_size,
                                           sizeof(int) * nb_args); //FIXMEIM - sizeof guest ?
@@ -446,10 +256,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
         int commmand_buffer_offset = 0;
 
         args_size = NULL;
-#ifdef ENABLE_GL_LOG
-        if (is_logging(pid))
-            write_gl_debug_cmd_short(_serialized_calls_func);
-#endif
 
         while (commmand_buffer_offset < command_buffer_size) {
             func_number =
@@ -462,10 +268,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                 return 0;
             }
             commmand_buffer_offset += sizeof(short);
-#ifdef ENABLE_GL_LOG
-            if (is_logging(pid))
-                write_gl_debug_cmd_short(func_number);
-#endif
 
             signature = (Signature *) tab_opengl_calls[func_number];
             ret_type = signature->ret_type;
@@ -486,10 +288,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                         args[i] =
                             *(int *) (command_buffer +
                                       commmand_buffer_offset);
-#ifdef ENABLE_GL_LOG
-                        if (is_logging(pid))
-                            write_gl_debug_cmd_int(args[i]);
-#endif
                         commmand_buffer_offset += sizeof(int);
                         break;
                     }
@@ -528,12 +326,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                                 return 0;
                             }
                         }
-#ifdef ENABLE_GL_LOG
-                        if (is_logging(pid))
-                            write_gl_debug_cmd_buffer_with_size(arg_size,
-                                                                (void *)
-                                                                args[i]);
-#endif
                         commmand_buffer_offset += arg_size;
 
                         break;
@@ -546,12 +338,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                         args[i] =
                             (arg_size) ? (long) (command_buffer +
                                                  commmand_buffer_offset) : 0;
-#ifdef ENABLE_GL_LOG
-                        if (is_logging(pid))
-                            write_gl_debug_cmd_buffer_without_size(arg_size,
-                                                                   (void *)
-                                                                   args[i]);
-#endif
                         commmand_buffer_offset += arg_size;
                         break;
                     }
@@ -569,12 +355,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                   CASE_IN_KNOWN_SIZE_POINTERS:
                     args[i] =
                         (long) (command_buffer + commmand_buffer_offset);
-#ifdef ENABLE_GL_LOG
-                    if (is_logging(pid))
-                        write_gl_debug_cmd_buffer_without_size(
-                                        tab_args_type_length[args_type[i]],
-                                        (void *) args[i]);
-#endif
                     commmand_buffer_offset +=
                         tab_args_type_length[args_type[i]];
                     break;
@@ -597,10 +377,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
         ret = 0;
     } else {
 ////////////////////////////////////// One-at-a-time calls here 
-#ifdef ENABLE_GL_LOG
-        if (is_logging(pid))
-            write_gl_debug_cmd_short(func_number);
-#endif
 
         for (i = 0; i < nb_args; i++) {
             switch (args_type[i]) {
@@ -611,10 +387,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             case TYPE_UNSIGNED_SHORT:
             case TYPE_SHORT:
             case TYPE_FLOAT:
-#ifdef ENABLE_GL_LOG
-                if (is_logging(pid))
-                    write_gl_debug_cmd_int(args[i]);
-#endif
                 break;
 
             case TYPE_NULL_TERMINATED_STRING:
@@ -652,11 +424,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                         return 0;
                     }
                 }
-#ifdef ENABLE_GL_LOG
-                if (is_logging(pid))
-                    write_gl_debug_cmd_buffer_with_size(args_size[i],
-                                                        (void *) args[i]);
-#endif
                 break;
 
               CASE_IN_LENGTH_DEPENDING_ON_PREVIOUS_ARGS:
@@ -674,29 +441,12 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                         disconnect_current();
                         return 0;
                     }
-#ifdef ENABLE_GL_LOG
-                    if (is_logging(pid))
-                        write_gl_debug_cmd_buffer_without_size(args_size[i],
-                                        (void *) args[i]);
-#endif
                     break;
                 }
 
               CASE_OUT_POINTERS:
                 {
 //                    int mem_state;
-
-#ifdef ENABLE_GL_LOG
-                    if (is_logging(pid))
-                        switch (args_type[i]) {
-                          CASE_OUT_UNKNOWN_SIZE_POINTERS:
-                            write_gl_debug_cmd_int(args_size[i]);
-                            break;
-
-                        default:
-                            break;
-                        }
-#endif
 
                     if (func_number == glXQueryExtension_func && args[i] == 0) {
                         saved_out_ptr[i] = 0;
@@ -732,7 +482,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
  //FIXME - we should not have to copy here once we get shm working.
                     saved_out_ptr[i] = args[i];
                     if (args[i]) {
-			fprintf(stderr, "Alloc_args: %d\n", args_size[i]);
+//			fprintf(stderr, "Alloc_args: %d\n", args_size[i]);
                         args[i] = (arg_t) malloc(args_size[i]);
                     }
                     break;
@@ -759,12 +509,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                     disconnect_current();
                     return 0;
                 }
-#ifdef ENABLE_GL_LOG
-                if (is_logging(pid))
-                    write_gl_debug_cmd_buffer_without_size
-                        (tab_args_type_length[args_type[i]],
-                         (void *) args[i]);
-#endif
                 break;
 
             case TYPE_IN_IGNORED_POINTER:
@@ -798,22 +542,11 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                 }
             }
 
-            if (must_save && args[0])
-                fprintf(stderr, "error: pid %i is already recording\n",
-                                logger_pid);
-            else if (args[0]) {
-                logger_pid = pid;
-                must_save = 1;
-            }
             *(int *) args[1] = 1; // FIXME - pass alt. value if we use kvm ?
             ret = 0;
         } else {
-            ret = do_function_call(func_number, args, ret_string);         // FIXMEIM --------------------------------------------- call here
+            ret = do_function_call(func_number, args, ret_string);
         }
-#ifdef ENABLE_GL_LOG
-        if (is_logging(pid) && func_number == glXGetVisualFromFBConfig_func)
-            write_gl_debug_cmd_int(ret);
-#endif
         for (i = 0; i < nb_args; i++) {
             switch (args_type[i]) {
               CASE_OUT_POINTERS:
@@ -825,7 +558,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                             disconnect_current();
                             return 0;
                         }
-			fprintf(stderr, "(un)Alloc_args: %d\n", args_size[i]);
+//			fprintf(stderr, "(un)Alloc_args: %d\n", args_size[i]);
                         free((void *) args[i]);
                     }
                     break;
@@ -846,12 +579,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                 }
             }
     }
-
-#ifdef ENABLE_GL_LOG
-    if (is_logging(pid) && func_number == _exit_process_func) {
-        write_gl_debug_end();
-    }
-#endif
 
     return ret;
 }

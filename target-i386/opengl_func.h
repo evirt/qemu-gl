@@ -1,6 +1,4 @@
 /*
- *  Main header for both host and guest sides
- *
  *  Copyright (c) 2006,2007 Even Rouault
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1097,12 +1095,3 @@ static inline int compute_arg_length(FILE *err_file, int func_number,
                   func_number == glBufferDataARB_func || \
                   func_number == glNewObjectBufferATI_func)
 
-#ifdef __amd64__
-#define _init_func _init64_func
-#else
-#ifdef __i386__
-#define _init_func _init32_func
-#else
-#error Unsupported ABI
-#endif
-#endif
