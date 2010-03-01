@@ -195,135 +195,8 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
         }
     }
 
-    if (func_number == _serialized_calls_func) {
-        int command_buffer_size = args_size[0];
-        const void *command_buffer =
-            get_host_read_pointer(env, args[0], command_buffer_size);
-        int commmand_buffer_offset = 0;
-
-        args_size = NULL;
-
-        while (commmand_buffer_offset < command_buffer_size) {
-            func_number =
-                *(short *) (command_buffer + commmand_buffer_offset);
-            if (!(func_number >= 0 && func_number < GL_N_CALLS)) {
-                fprintf(stderr,
-                        "func_number >= 0 && func_number < GL_N_CALLS failed at "
-                        "commmand_buffer_offset=%d (command_buffer_size=%d)\n",
-                        commmand_buffer_offset, command_buffer_size);
-                return 0;
-            }
-            commmand_buffer_offset += sizeof(short);
-
-            signature = (Signature *) tab_opengl_calls[func_number];
-            ret_type = signature->ret_type;
-            assert(ret_type == TYPE_NONE);
-            nb_args = signature->nb_args;
-            args_type = signature->args_type;
-
-            for (i = 0; i < nb_args; i++) {
-                switch (args_type[i]) {
-                case TYPE_UNSIGNED_INT:
-                case TYPE_INT:
-                case TYPE_UNSIGNED_CHAR:
-                case TYPE_CHAR:
-                case TYPE_UNSIGNED_SHORT:
-                case TYPE_SHORT:
-                case TYPE_FLOAT:
-                    {
-                        args[i] =
-                            *(int *) (command_buffer +
-                                      commmand_buffer_offset);
-                        commmand_buffer_offset += sizeof(int);
-                        break;
-                    }
-
-                case TYPE_NULL_TERMINATED_STRING:
-                  CASE_IN_UNKNOWN_SIZE_POINTERS:
-                    {
-                        int arg_size =
-                            *(int *) (command_buffer +
-                                      commmand_buffer_offset);
-                        commmand_buffer_offset += sizeof(int);
-
-                        if (arg_size == 0) {
-                            args[i] = 0;
-                        } else {
-                            args[i] =
-                                (long) (command_buffer +
-                                        commmand_buffer_offset);
-                        }
-
-                        if (args[i] == 0) {
-                            if (!IS_NULL_POINTER_OK_FOR_FUNC(func_number)) {
-                                fprintf(stderr, "call %s arg %d pid=%d\n",
-                                        tab_opengl_calls_name[func_number], i,
-                                        pid);
-                                disconnect_current();
-                                return 0;
-                            }
-                        } else {
-                            if (arg_size == 0) {
-                                fprintf(stderr, "call %s arg %d pid=%d\n",
-                                        tab_opengl_calls_name[func_number], i,
-                                        pid);
-                                fprintf(stderr, "args_size[i] == 0 !!\n");
-                                disconnect_current();
-                                return 0;
-                            }
-                        }
-                        commmand_buffer_offset += arg_size;
-
-                        break;
-                    }
-
-                  CASE_IN_LENGTH_DEPENDING_ON_PREVIOUS_ARGS:
-                    {
-                        int arg_size =
-                            compute_arg_length(stderr, func_number, i, args);
-                        args[i] =
-                            (arg_size) ? (long) (command_buffer +
-                                                 commmand_buffer_offset) : 0;
-                        commmand_buffer_offset += arg_size;
-                        break;
-                    }
-
-                  CASE_OUT_POINTERS:
-                    {
-                        fprintf(stderr,
-                                "shouldn't happen TYPE_OUT_xxxx : call %s arg %d pid=%d\n",
-                                tab_opengl_calls_name[func_number], i, pid);
-                        disconnect_current();
-                        return 0;
-                    }
-
-                case TYPE_DOUBLE:
-                  CASE_IN_KNOWN_SIZE_POINTERS:
-                    args[i] =
-                        (long) (command_buffer + commmand_buffer_offset);
-                    commmand_buffer_offset +=
-                        tab_args_type_length[args_type[i]];
-                    break;
-
-                case TYPE_IN_IGNORED_POINTER:
-                    args[i] = 0;
-                    break;
-
-                default:
-                    fprintf(stderr,
-                            "shouldn't happen : call %s arg %d pid=%d\n",
-                            tab_opengl_calls_name[func_number], i, pid);
-                    disconnect_current();
-                    return 0;
-                }
-            }
-            do_function_call(process, func_number, args, ret_string);
-        }
-
-        ret = 0;
-    } else {
 ////////////////////////////////////// One-at-a-time calls here 
-
+    do {
         for (i = 0; i < nb_args; i++) {
             switch (args_type[i]) {
             case TYPE_UNSIGNED_INT:
@@ -512,7 +385,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                     return 0;
                 }
             }
-    }
+    } while (0);
 
     return ret;
 }

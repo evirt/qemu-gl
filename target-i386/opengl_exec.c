@@ -52,7 +52,6 @@
 #include "opengl_process.h"
 
 //#define SYSTEMATIC_ERROR_CHECK
-//#define BUFFER_BEGINEND
 
 #define glGetError() 0
 
@@ -327,7 +326,6 @@ typedef struct {
 
     Display *dpy;
 
-    int began;
     int primitive;
     int bufsize;
     int bufstart;
@@ -351,48 +349,6 @@ void init_process_tab()
 #define ARG_TO_DOUBLE(x)              (*(double*)(x))
 
 #include "server_stub.c"
-
-/* ---- */
-
-#ifdef BUFFER_BEGINEND
-/* A user of the following two functions must not buffer any calls that
- * may throw an error (i.e. errors conditions must be checked before
- * storing in the buffer) or return values.  */
-static inline arg_t *cmd_buffer_alloc(ProcessState *process, size_t elems)
-{
-    arg_t *ret;
-
-    if (unlikely(process->bufstart + elems > process->bufsize)) {
-        process->bufsize = (process->bufsize ?: 0x100) << 1;
-        process->cmdbuf = qemu_realloc(process->cmdbuf,
-                        process->bufsize * sizeof(arg_t));
-    }
-
-    ret = process->cmdbuf + process->bufstart;
-    process->bufstart += elems;
-    return ret;
-}
-
-static inline void cmd_buffer_replay(ProcessState *process)
-{
-    Signature *sig;
-    int func_number;
-    union gl_ret_type ret;
-    arg_t *call = process->cmdbuf;
-
-    while (process->bufstart) {
-        func_number = *call ++;
-        sig = (Signature *) tab_opengl_calls[func_number];
-
-        execute_func(func_number, call, &ret);
-
-        call += sig->nb_args;
-        process->bufstart -= sig->nb_args + 1;
-    }
-}
-#endif
-
-/* ---- */
 
 typedef void *ClientGLXDrawable;
 static inline ClientGLXDrawable to_drawable(arg_t arg)
@@ -1138,34 +1094,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         }
     }
 
-#ifdef BUFFER_BEGINEND
-    if (process->began) {
-        /* Need to check for any errors now because later we won't have
-         * a chance to report them.  */
-        if (beginend_allowed[func_number]) {
-            arg_t *buf = cmd_buffer_alloc(process, signature->nb_args + 1);
-
-            /* TODO: pointer arguments */
-            buf[0] = func_number;
-            memcpy(buf + 1, args, signature->nb_args * sizeof(arg_t));
-        } else if (likely(func_number == glEnd_func)) {
-            process->began = 0;
-
-            glBegin(process->primitive);
-            cmd_buffer_replay(process);
-            glEnd();
-        } else {
-            /* TODO: properly report */
-#ifdef SYSTEMATIC_ERROR_CHECK
-            process->current_state->last_error = INVALID_OPERATION;
-#endif
-        }
-
-        func_number = -1;
-    }
-#endif
-
-
     switch (func_number) {
     case -1:
         break;
@@ -1318,13 +1246,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
             break;
         }
-
-#ifdef BUFFER_BEGINEND
-    case glBegin_func:
-        process->began = 1;
-        process->primitive = args[0];
-        break;
-#endif
 
     case glXWaitGL_func:
         {
