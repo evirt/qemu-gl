@@ -985,12 +985,15 @@ void _create_context(ProcessState *process, GLXContext ctxt, int fake_ctxt,
     process->nb_states++;
 }
 
-static ProcessState *process;
-
-void do_disconnect_current(void)
+void do_disconnect_current(ProcessState *process)
 {
     int i;
     Display *dpy = process->dpy;
+
+    if(!process->p.argcpy_target_to_host)
+        fprintf(stderr, "Likely died prior to init: pid %d\n", process->p.process_id);
+    else 
+        fprintf("disconnect GL process: %d\n", process->p.process_id);
 
     glXMakeCurrent(dpy, 0, NULL);
 
@@ -1073,6 +1076,7 @@ static const int beginend_allowed[GL_N_CALLS] = {
 
 ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call)
 {
+    ProcessState *process;
     int i;
 
     /* Lookup a process stuct. If there isnt one associated with this pid
@@ -1115,7 +1119,7 @@ ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call)
     return (ProcessStruct *)process; // Cast is ok due to struct defn.
 }
 
-int do_function_call(int func_number, arg_t *args, char *ret_string)
+int do_function_call(ProcessState *process, int func_number, arg_t *args, char *ret_string)
 {
     union gl_ret_type ret;
     Display *dpy = process->dpy;
@@ -1170,7 +1174,7 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
         break;
 
     case _exit_process_func:
-        do_disconnect_current();
+        do_disconnect_current(process);
         break;
 
     case _changeWindowState_func:
@@ -1624,7 +1628,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             if (ret.i) {
                 for (i = 0; i < process->nb_states; i ++) {
                     if (process->glstates[i]->fake_ctxt == fake_ctxt) {
-                        /* HACK !!! REMOVE */
+                        /* HACK !!! REMOVE  IM - I think this is correct actually*/
                         process->current_state = process->glstates[i];
                         process->current_state->drawable = host_drawable;
                         break;
