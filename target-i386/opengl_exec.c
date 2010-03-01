@@ -1133,9 +1133,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     if (parent_dpy)
         dpy = parent_dpy;
 
-    process->p.instr_counter++;
     if (display_function_call) {
-        fprintf(stderr, "[%d]> %s\n", process->p.instr_counter,
+        fprintf(stderr, "[%d]> %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
 	while(*tmp_args) {
 		fprintf(stderr, " + %08x\n", *tmp_args++);
@@ -3887,7 +3886,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
     }
 
     if (display_function_call)
-        fprintf(stderr, "[%d]< %s\n", process->p.instr_counter,
+        fprintf(stderr, "[%d]< %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
 
     return ret.i;
