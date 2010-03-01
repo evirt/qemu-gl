@@ -45,12 +45,12 @@ void helper_opengl(void)
 
 
 extern void init_process_tab(void);
-extern int do_function_call(int func_number, arg_t *args, char *ret_string);
+extern int do_function_call(ProcessStruct *process, int func_number, arg_t *args, char *ret_string);
 
-void do_disconnect_current(void);
+void do_disconnect_current(ProcessStruct *process);
 ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call);
 
-#define disconnect_current() do_disconnect_current()
+#define disconnect_current() do_disconnect_current((process))
 
 static int argcpy_target32_to_host(CPUState *env, void *host_addr,
                                    target_ulong target_addr, int nb_args)
@@ -312,7 +312,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                     return 0;
                 }
             }
-            do_function_call(func_number, args, ret_string);
+            do_function_call(process, func_number, args, ret_string);
         }
 
         ret = 0;
@@ -472,7 +472,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             *(int *) args[1] = 1; // FIXME - pass alt. value if we use kvm ?
             ret = 0;
         } else {
-            ret = do_function_call(func_number, args, ret_string);
+            ret = do_function_call(process, func_number, args, ret_string);
         }
 
         for (i = 0; i < nb_args; i++) {
@@ -555,7 +555,6 @@ int virtio_opengl_link(char *glbuffer) {
 
 	if (cpu_memory_rw_debug(env, v[3], (void *) i, 4, 1)) {
 		fprintf (stderr, "couldnt write back return code\n");
-		disconnect_current();
 	}
 	doing_opengl = 0;
 	
