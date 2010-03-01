@@ -47,10 +47,15 @@ void helper_opengl(void)
 extern void init_process_tab(void);
 extern int do_function_call(ProcessStruct *process, int func_number, arg_t *args, char *ret_string);
 
-void do_disconnect_current(ProcessStruct *process);
-ProcessStruct *do_context_switch(pid_t pid, int call);
+void do_disconnect(ProcessStruct *process);
+#define disconnect(a) \
+	do_disconnect(a);\
+        kill_process = 1;\
+	a = NULL;
 
-#define disconnect_current() do_disconnect_current((process))
+ProcessStruct *do_context_switch(pid_t pid, int switch_gl_context);
+
+int kill_process;
 
 static int argcpy_target32_to_host(CPUState *env, void *host_addr,
                                    target_ulong target_addr, int nb_args)
@@ -137,6 +142,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
         ret_string = malloc(32768);
     }
 
+    /* Select the appropriate context for this pid if it isnt already active */
     if (!process || process->process_id != pid) {
         process = do_context_switch(pid, func_number);
 	if(unlikely(func_number == _init32_func ||
@@ -152,15 +158,16 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             }
         }
         if(unlikely(!process->argcpy_target_to_host)) {
-            fprintf(stderr, "commands submitted before init.\n");
-            disconnect_current();
+            if(func_number != _exit_process_func)
+                fprintf(stderr, "commands submitted before init.\n");
+            disconnect(process);
             return 0;
         }
     }
 
     if (unlikely(func_number == _exit_process_func)) {
-        disconnect_current();
-	return 0;
+        disconnect(process);
+	return 0;   // No need to continue - nothing to process.
     }
 
     reset_host_offset();
@@ -171,7 +178,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             fprintf(stderr, "call %s pid=%d\n",
                     tab_opengl_calls_name[func_number], pid);
             fprintf(stderr, "cannot get call parameters\n");
-            disconnect_current();
+            disconnect(process);
             return 0;
         }
 
@@ -183,7 +190,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             fprintf(stderr, "call %s pid=%d\n",
                     tab_opengl_calls_name[func_number], pid);
             fprintf(stderr, "cannot get call parameters size\n");
-            disconnect_current();
+            disconnect(process);
             return 0;
         }
     }
@@ -334,20 +341,20 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                     if (!IS_NULL_POINTER_OK_FOR_FUNC(func_number)) {
                         fprintf(stderr, "call %s arg %d pid=%d\n",
                                 tab_opengl_calls_name[func_number], i, pid);
-                        disconnect_current();
+                        disconnect(process);
                         return 0;
                     }
                 } else if (args[i] == 0 && args_size[i] != 0) {
                     fprintf(stderr, "call %s arg %d pid=%d\n",
                             tab_opengl_calls_name[func_number], i, pid);
                     fprintf(stderr, "args[i] == 0 && args_size[i] != 0 !!\n");
-                    disconnect_current();
+                    disconnect(process);
                     return 0;
                 } else if (args[i] != 0 && args_size[i] == 0) {
                     fprintf(stderr, "call %s arg %d pid=%d\n",
                             tab_opengl_calls_name[func_number], i, pid);
                     fprintf(stderr, "args[i] != 0 && args_size[i] == 0 !!\n");
-                    disconnect_current();
+                    disconnect(process);
                     return 0;
                 }
                 if (args[i]) {
@@ -359,7 +366,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                                 tab_opengl_calls_name[func_number], i, pid);
                         fprintf(stderr, "a) can not get %d bytes\n",
                                 args_size[i]);
-                        disconnect_current();
+                        disconnect(process);
                         return 0;
                     }
                 }
@@ -377,7 +384,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                                 tab_opengl_calls_name[func_number], i, pid);
                         fprintf(stderr, "b) can not get %d bytes\n",
                                 args_size[i]);
-                        disconnect_current();
+                        disconnect(process);
                         return 0;
                     }
                     break;
@@ -396,26 +403,26 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                             fprintf(stderr, "call %s arg %d pid=%d\n",
                                     tab_opengl_calls_name[func_number], i,
                                     pid);
-                            disconnect_current();
+                            disconnect(process);
                             return 0;
                         }
                         fprintf(stderr, "call %s arg %d pid=%d\n",
                                 tab_opengl_calls_name[func_number], i, pid);
-                        disconnect_current();
+                        disconnect(process);
                         return 0;
                     } else if (args[i] == 0 && args_size[i] != 0) {
                         fprintf(stderr, "call %s arg %d pid=%d\n",
                                 tab_opengl_calls_name[func_number], i, pid);
                         fprintf(stderr,
                                 "args[i] == 0 && args_size[i] != 0 !!\n");
-                        disconnect_current();
+                        disconnect(process);
                         return 0;
                     } else if (args[i] != 0 && args_size[i] == 0) {
                         fprintf(stderr, "call %s arg %d pid=%d\n",
                                 tab_opengl_calls_name[func_number], i, pid);
                         fprintf(stderr,
                                 "args[i] != 0 && args_size[i] == 0 !!\n");
-                        disconnect_current();
+                        disconnect(process);
                         return 0;
                     }
  //FIXME - we should not have to copy here once we get shm working.
@@ -435,7 +442,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                             tab_opengl_calls_name[func_number], i, pid);
                     fprintf(stderr, "c) can not get %d bytes\n",
                             tab_args_type_length[args_type[i]]);
-                    disconnect_current();
+                    disconnect(process);
                     return 0;
                 }
                 args[i] = (arg_t) get_host_read_pointer(env,
@@ -445,7 +452,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                             tab_opengl_calls_name[func_number], i, pid);
                     fprintf(stderr, "d) can not get %d bytes\n",
                             tab_args_type_length[args_type[i]]);
-                    disconnect_current();
+                    disconnect(process);
                     return 0;
                 }
                 break;
@@ -457,7 +464,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             default:
                 fprintf(stderr, "shouldn't happen : call %s arg %d pid=%d\n",
                         tab_opengl_calls_name[func_number], i, pid);
-                disconnect_current();
+                disconnect(process);
                 return 0;
             }
         }
@@ -470,6 +477,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             *(int *) args[1] = 1; // FIXME - pass alt. value if we use kvm ?
             ret = 0;
         } else {
+            // This function should never be passed _init32|64 or _exit_process
             ret = do_function_call(process, func_number, args, ret_string);
         }
 
@@ -481,7 +489,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
 			if (cpu_memory_rw_debug(env, saved_out_ptr[i], (void *) args[i], args_size[i], 1)) {
                             fprintf(stderr, "could not copy out parameters "
                                             "back to user space\n");
-                            disconnect_current();
+                            disconnect(process);
                             return 0;
                         }
 //			fprintf(stderr, "(un)Alloc_args: %d\n", args_size[i]);
@@ -500,7 +508,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
 		if (cpu_memory_rw_debug(env, target_ret_string, (void *)ret_string, strlen(ret_string) + 1, 1)) {
                     fprintf(stderr, "cannot copy out parameters "
                                     "back to user space\n");
-                    disconnect_current();
+                    disconnect(process);
                     return 0;
                 }
             }
@@ -533,31 +541,34 @@ void helper_opengl(void)
 }
 
 int virtio_opengl_link(char *glbuffer) {
-	int *i = (int*)glbuffer;
-        int *v = (int*)((char*)glbuffer + 8);
-	int ret;
-//	static int lastpid, pid;
-//	static char *rbuffer;
+    int *i = (int*)glbuffer;
+    int ret;
 
-	cpu_synchronize_state(env);
+    cpu_synchronize_state(env);
 
-//	pid = i[1];
-//	if(pid != lastpid || !rbuffer)
-//		rbuffer = get_phys_mem_addr(env, v[3]);
+    doing_opengl = 1;
 
-	doing_opengl = 1;
-//	fprintf(stderr, " Entering call: params: %08x %08x   %08x %08x %08x  %08x\n", i[0], i[1], v[0], v[1], v[2], v[3]);
-	ret = decode_call(env, i[0], i[1], v[0], v[1], v[2]);
-//	fprintf(stderr, "returned from call: ret = %d\n", ret);
-	i[0] = ret;
+    if(i[0] == 4) {
+        if(i[6] == 1)
+            fprintf(stderr, "pid: %d   - death from kernel\n", i[1]);
+        else
+            fprintf(stderr, "pid: %d   - death from userspace\n", i[1]);
+    }
 
-	if (cpu_memory_rw_debug(env, v[3], (void *) i, 4, 1)) {
-		fprintf (stderr, "couldnt write back return code\n");
-	}
-	doing_opengl = 0;
+    kill_process = 0;
+
+    ret = decode_call(env, i[0], i[1], i[2], i[3], i[4]);
+    i[0] = ret;
+
+    if(kill_process)
+        i[6] = 0xdeadbeef;
+
+    if (cpu_memory_rw_debug(env, i[5], (void *) i, 7*4, 1)) {
+        fprintf (stderr, "couldnt write back return code\n");
+    }
+    doing_opengl = 0;
 	
-//	lastpid = pid;
-	return ret;
+    return ret;
 }
 
 #endif
