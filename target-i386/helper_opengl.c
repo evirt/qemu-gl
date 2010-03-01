@@ -393,7 +393,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
     return ret;
 }
 
-static int decode_call(CPUState *env, int func_number, int pid,
+static inline int decode_call(CPUState *env, int func_number, int pid,
                        target_ulong target_ret_string, target_ulong in_args,
                        target_ulong in_args_size)
 {
