@@ -145,17 +145,10 @@ static XVisualInfo *get_default_visual(Display *dpy)
 static Display *parent_dpy = NULL;
 static Window qemu_parent_window = 0;
 
-static Window active_win = 0;   /* FIXME */
-static int active_win_x = 0;
-static int active_win_y = 0;
-
 void opengl_exec_set_parent_window(Display *_dpy, Window _parent_window)
 {
     parent_dpy = _dpy;
     qemu_parent_window = _parent_window;
-    if (active_win)
-        XReparentWindow(_dpy, active_win, _parent_window, active_win_x,
-                        active_win_y);
 }
 
 static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
@@ -205,10 +198,6 @@ static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
      * XNextEvent(dpy, &event); switch (event.type) { case CreateNotify: { if
      * (((XCreateWindowEvent*)&event)->window == win) { loop = 0; } break; } }
      * } } */
-
-    /* TODO */
-    if (!active_win)
-        active_win = win;
 
     return win;
 }
@@ -1042,13 +1031,9 @@ void do_disconnect_current(void)
                         "= %p\n", (int) win, process->
                         association_clientdrawable_serverdrawable[i].key);
 
-//FIXMEIM - the crasher is here somewhere.
-        if (active_win == win)
-            active_win = 0;
-
         XDestroyWindow(dpy, win);
 
-#if 1
+//FIXMEIM - wtf is this for?
         int loop = 1;
         while (loop) {
             while (XPending(dpy) > 0) {
@@ -1066,7 +1051,6 @@ void do_disconnect_current(void)
             }
             break; /* TODO */
         }
-#endif
 
     }
 
@@ -1264,8 +1248,6 @@ int do_function_call(int func_number, arg_t *args, char *ret_string)
                      params[2] == pos.width && params[3] == pos.height)) {
                     int redim = !(params[2] == pos.width &&
                                   params[3] == pos.height);
-                    active_win_x = params[0];
-                    active_win_y = params[1];
 
 //                    fprintf(stderr, "old x=%d y=%d width=%d height=%d\n",
 //                            pos.x, pos.y, pos.width, pos.height);
@@ -1742,14 +1724,6 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 }
 #endif
 
-                ////////// HORRIBLE HORRIBLE HACK
-                if (drawable != active_win && active_win) {
-                    glXMakeCurrent(dpy, active_win,
-                                    processes[0].current_state->context);
-                    glXSwapBuffers(dpy, active_win);
-                    glXMakeCurrent(dpy, process->current_state->drawable,
-                                    process->current_state->context);
-                }
                 glXSwapBuffers(dpy, drawable);
             }
             break;
