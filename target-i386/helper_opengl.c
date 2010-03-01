@@ -143,8 +143,11 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
     }
 
     /* Select the appropriate context for this pid if it isnt already active */
+    /* Note: if we're about to execute glXMakeCurrent() then we tell the
+             renderer not to waste its time switching contexts */
     if (!process || process->process_id != pid) {
-        process = do_context_switch(pid, func_number);
+        process = do_context_switch(pid,
+                                    (func_number == glXMakeCurrent_func)?0:1);
 	if(unlikely(func_number == _init32_func ||
                     func_number == _init64_func)) {
             if(!process->argcpy_target_to_host) {
