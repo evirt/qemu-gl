@@ -1074,7 +1074,7 @@ static const int beginend_allowed[GL_N_CALLS] = {
 #include "gl_beginend.h"
 };
 
-ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call)
+ProcessStruct *do_context_switch(pid_t pid, int call)
 {
     ProcessState *process;
     int i;
@@ -1094,7 +1094,7 @@ ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call)
             process->p.process_id = pid;
             init_gl_state(&process->default_state);
             process->current_state = &process->default_state;
-            process->dpy = dpy;
+            process->dpy = parent_dpy;
             break;
         }
     if (process == NULL) {
@@ -1113,7 +1113,7 @@ ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call)
         break;
 
     default:
-            glXMakeCurrent(dpy, process->current_state->drawable,
+            glXMakeCurrent(process->dpy, process->current_state->drawable,
                             process->current_state->context);
     }
     return (ProcessStruct *)process; // Cast is ok due to struct defn.
