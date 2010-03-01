@@ -48,8 +48,6 @@
 
 #include "opengl_process.h"
 
-//#define SYSTEMATIC_ERROR_CHECK
-
 #define glGetError() 0
 
 #define GET_EXT_PTR(type, funcname, args_decl) \
@@ -292,9 +290,6 @@ typedef struct {
     RangeAllocator ownListAllocator;
     RangeAllocator *listAllocator;
 
-#ifdef SYSTEMATIC_ERROR_CHECK
-    int last_error;
-#endif
 } GLState;
 
 typedef struct {
@@ -3732,11 +3727,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
     case glGetError_func:
         {
-#ifdef SYSTEMATIC_ERROR_CHECK
-            ret.i = process->current_state->last_error;
-#else
             ret.i = glGetError();
-#endif
             break;
         }
 
@@ -3765,18 +3756,6 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
         execute_func(func_number, args, &ret);
         break;
     }
-
-#ifdef SYSTEMATIC_ERROR_CHECK
-    if (func_number == glGetError_func) {
-        process->current_state->last_error = 0;
-    } else {
-        process->current_state->last_error = glGetError();
-        if (process->current_state->last_error != 0) {
-            printf("error %s 0x%x\n", tab_opengl_calls_name[func_number],
-                   process->current_state->last_error);
-        }
-    }
-#endif
 
     switch (ret_type) {
     case TYPE_NONE:
