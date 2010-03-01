@@ -115,29 +115,9 @@ static const void *get_host_read_pointer(CPUState *env,
 }
 
 int doing_opengl = 0;
-static int last_func_number = -1;
 
 #include <dlfcn.h>
 #include <signal.h>
-
-static void (*anticrash_handler) (void *) = NULL;
-static void (*show_stack_from_signal_handler) (int, int, int) = NULL;
-
-void my_anticrash_sigsegv_handler(int signum, siginfo_t *info, void *ptr)
-{
-    static int counter = 0;
-
-    counter++;
-
-    printf("oops\n");
-
-    /* if (show_stack_from_signal_handler && counter == 1) { struct ucontext* 
-     * ctxt = (struct ucontext*)ptr; show_stack_from_signal_handler(10,
-     * ctxt->uc_mcontext.gregs[REG_EBP], ctxt->uc_mcontext.gregs[REG_ESP]); } */
-    anticrash_handler(ptr);
-
-    counter--;
-}
 
 static int decode_call_int(CPUState *env, int func_number, int pid,
                            target_ulong target_ret_string,
@@ -156,38 +136,13 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
     static arg_t args[50];
     static Display *dpy = NULL;
     static ProcessStruct *process = NULL;
+    static int first;
 
-    if (dpy == NULL) {
-        void *handle = dlopen("libanticrash.so", RTLD_LAZY);
-
-        if (handle) {
-            anticrash_handler = dlsym(handle, "anticrash_handler");
-            if (anticrash_handler) {
-                fprintf(stderr, "anticrash handler enabled\n");
-                struct sigaction sigsegv_action;
-                struct sigaction old_sigsegv_action;
-
-                sigsegv_action.sa_sigaction = my_anticrash_sigsegv_handler;
-                sigemptyset(&(sigsegv_action.sa_mask));
-                sigsegv_action.sa_flags = SA_SIGINFO | SA_NODEFER;
-                sigaction(SIGSEGV, &sigsegv_action, &old_sigsegv_action);
-            }
-        }
-        handle = dlopen("libgetstack.so", RTLD_LAZY);
-        if (handle) {
-            show_stack_from_signal_handler =
-                dlsym(handle, "show_stack_from_signal_handler");
-        }
-
+    if(!first) {
+        first = 1;
         dpy = XOpenDisplay(NULL);
         init_process_tab();
         ret_string = malloc(32768);
-    }
-
-    if (unlikely(last_func_number == _exit_process_func &&
-                            func_number == _exit_process_func)) {
-        last_func_number = -1;
-        return 0;
     }
 
     if (!last_process || last_process->process_id != pid) {
