@@ -37,8 +37,7 @@
 #include <mesa_gl.h>
 #include <mesa_glx.h>
 
-// FIXME - probably breaks badly on 32 bit host w/ 64 bit guest
-typedef long unsigned int target_phys_addr_t;
+#include "exec.h"
 
 #include "opengl_func.h"
 
@@ -46,6 +45,8 @@ typedef long unsigned int target_phys_addr_t;
 #include "mesa_mipmap.c"
 
 #include "../qemu-common.h"
+
+#include "opengl_process.h"
 
 //#define SYSTEMATIC_ERROR_CHECK
 //#define BUFFER_BEGINEND
@@ -308,8 +309,7 @@ typedef struct {
 } GLState;
 
 typedef struct {
-    int process_id;
-    int instr_counter;
+    ProcessStruct p;
 
     int x, y, width, height;
     WindowPosStruct currentDrawablePos;
@@ -339,9 +339,9 @@ typedef struct {
     int bufsize;
     int bufstart;
     arg_t *cmdbuf;
-} ProcessStruct;
+} ProcessState;
 
-static ProcessStruct processes[MAX_HANDLED_PROCESS];
+static ProcessState processes[MAX_HANDLED_PROCESS];
 
 void init_process_tab()
 {
@@ -365,7 +365,7 @@ void init_process_tab()
 /* A user of the following two functions must not buffer any calls that
  * may throw an error (i.e. errors conditions must be checked before
  * storing in the buffer) or return values.  */
-static inline arg_t *cmd_buffer_alloc(ProcessStruct *process, size_t elems)
+static inline arg_t *cmd_buffer_alloc(ProcessState *process, size_t elems)
 {
     arg_t *ret;
 
@@ -380,7 +380,7 @@ static inline arg_t *cmd_buffer_alloc(ProcessStruct *process, size_t elems)
     return ret;
 }
 
-static inline void cmd_buffer_replay(ProcessStruct *process)
+static inline void cmd_buffer_replay(ProcessState *process)
 {
     Signature *sig;
     int func_number;
@@ -414,7 +414,7 @@ static inline ClientGLXDrawable to_drawable(arg_t arg)
 }
 
 GLXContext get_association_fakecontext_glxcontext(
-                ProcessStruct *process, int fakecontext)
+                ProcessState *process, int fakecontext)
 {
     int i;
 
@@ -430,7 +430,7 @@ GLXContext get_association_fakecontext_glxcontext(
 }
 
 void set_association_fakecontext_glxcontext(
-                ProcessStruct *process, int fakecontext, GLXContext glxcontext)
+                ProcessState *process, int fakecontext, GLXContext glxcontext)
 {
     int i;
 
@@ -451,7 +451,7 @@ void set_association_fakecontext_glxcontext(
 }
 
 void unset_association_fakecontext_glxcontext(
-                ProcessStruct *process, int fakecontext)
+                ProcessState *process, int fakecontext)
 {
     int i;
 
@@ -470,7 +470,7 @@ void unset_association_fakecontext_glxcontext(
 /* ---- */
 
 XVisualInfo *get_association_fakecontext_visual(
-                ProcessStruct *process, int fakecontext)
+                ProcessState *process, int fakecontext)
 {
     int i;
 
@@ -484,7 +484,7 @@ XVisualInfo *get_association_fakecontext_visual(
     return NULL;
 }
 
-void set_association_fakecontext_visual(ProcessStruct *process,
+void set_association_fakecontext_visual(ProcessState *process,
                 int fakecontext, XVisualInfo *visual)
 {
     int i;
@@ -507,7 +507,7 @@ void set_association_fakecontext_visual(ProcessStruct *process,
 /* ---- */
 
 GLXPbuffer get_association_fakepbuffer_pbuffer(
-                ProcessStruct *process, ClientGLXDrawable fakepbuffer)
+                ProcessState *process, ClientGLXDrawable fakepbuffer)
 {
     int i;
 
@@ -522,7 +522,7 @@ GLXPbuffer get_association_fakepbuffer_pbuffer(
     return 0;
 }
 
-void set_association_fakepbuffer_pbuffer(ProcessStruct *process,
+void set_association_fakepbuffer_pbuffer(ProcessState *process,
                 ClientGLXDrawable fakepbuffer, GLXPbuffer pbuffer)
 {
     int i;
@@ -542,7 +542,7 @@ void set_association_fakepbuffer_pbuffer(ProcessStruct *process,
         fprintf(stderr, "MAX_ASSOC_SIZE reached\n");
 }
 
-void unset_association_fakepbuffer_pbuffer(ProcessStruct *process,
+void unset_association_fakepbuffer_pbuffer(ProcessState *process,
                 ClientGLXDrawable fakepbuffer)
 {
     int i;
@@ -562,7 +562,7 @@ void unset_association_fakepbuffer_pbuffer(ProcessStruct *process,
 /* ---- */
 
 GLXDrawable get_association_clientdrawable_serverdrawable(
-                ProcessStruct *process, ClientGLXDrawable clientdrawable)
+                ProcessState *process, ClientGLXDrawable clientdrawable)
 {
     int i;
 
@@ -579,7 +579,7 @@ GLXDrawable get_association_clientdrawable_serverdrawable(
 }
 
 ClientGLXDrawable get_association_serverdrawable_clientdrawable(
-                ProcessStruct *process, GLXDrawable serverdrawable)
+                ProcessState *process, GLXDrawable serverdrawable)
 {
     int i;
 
@@ -596,7 +596,7 @@ ClientGLXDrawable get_association_serverdrawable_clientdrawable(
 }
 
 void set_association_clientdrawable_serverdrawable(
-                ProcessStruct *process, ClientGLXDrawable clientdrawable,
+                ProcessState *process, ClientGLXDrawable clientdrawable,
                 GLXDrawable serverdrawable)
 {
     int i;
@@ -648,7 +648,7 @@ static int is_gl_vendor_ati(Display *dpy)
     return is_gl_vendor_ati_flag;
 }
 
-static int get_server_texture(ProcessStruct *process,
+static int get_server_texture(ProcessState *process,
                               unsigned int client_texture)
 {
     unsigned int server_texture = 0;
@@ -661,7 +661,7 @@ static int get_server_texture(ProcessStruct *process,
     return server_texture;
 }
 
-static int get_server_buffer(ProcessStruct *process,
+static int get_server_buffer(ProcessState *process,
                              unsigned int client_buffer)
 {
     unsigned int server_buffer = 0;
@@ -675,7 +675,7 @@ static int get_server_buffer(ProcessStruct *process,
 }
 
 
-static int get_server_list(ProcessStruct *process, unsigned int client_list)
+static int get_server_list(ProcessState *process, unsigned int client_list)
 {
     unsigned int server_list = 0;
 
@@ -687,7 +687,7 @@ static int get_server_list(ProcessStruct *process, unsigned int client_list)
     return server_list;
 }
 
-GLXFBConfig get_fbconfig(ProcessStruct *process, int client_fbconfig)
+GLXFBConfig get_fbconfig(ProcessState *process, int client_fbconfig)
 {
     int i;
     int nbtotal = 0;
@@ -958,7 +958,7 @@ static GLuint translate_id(GLsizei n, GLenum type, const GLvoid *list)
     }
 }
 
-void _create_context(ProcessStruct *process, GLXContext ctxt, int fake_ctxt,
+void _create_context(ProcessState *process, GLXContext ctxt, int fake_ctxt,
                      GLXContext shareList, int fake_shareList)
 {
     process->glstates =
@@ -996,7 +996,7 @@ void _create_context(ProcessStruct *process, GLXContext ctxt, int fake_ctxt,
     process->nb_states++;
 }
 
-static ProcessStruct *process;
+static ProcessState *process;
 
 void do_disconnect_current(void)
 {
@@ -1078,7 +1078,7 @@ void do_disconnect_current(void)
 
     for (i = 0; &processes[i] != process; i ++);
     memmove(&processes[i], &processes[i + 1],
-                    (MAX_HANDLED_PROCESS - 1 - i) * sizeof(ProcessStruct));
+                    (MAX_HANDLED_PROCESS - 1 - i) * sizeof(ProcessState));
 }
 
 static const int beginend_allowed[GL_N_CALLS] = {
@@ -1087,7 +1087,7 @@ static const int beginend_allowed[GL_N_CALLS] = {
 #include "gl_beginend.h"
 };
 
-void do_context_switch(Display *dpy, pid_t pid, int call)
+ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call)
 {
     int i;
 
@@ -1097,13 +1097,13 @@ void do_context_switch(Display *dpy, pid_t pid, int call)
      * current.
      */
     for (i = 0; i < MAX_HANDLED_PROCESS; i ++)
-        if (processes[i].process_id == pid) {
+        if (processes[i].p.process_id == pid) {
             process = &processes[i];
             break;
-        } else if (processes[i].process_id == 0) {
+        } else if (processes[i].p.process_id == 0) {
             process = &processes[i];
-            memset(process, 0, sizeof(ProcessStruct));
-            process->process_id = pid;
+            memset(process, 0, sizeof(ProcessState));
+            process->p.process_id = pid;
             init_gl_state(&process->default_state);
             process->current_state = &process->default_state;
             process->dpy = dpy;
@@ -1128,6 +1128,7 @@ void do_context_switch(Display *dpy, pid_t pid, int call)
             glXMakeCurrent(dpy, process->current_state->drawable,
                             process->current_state->context);
     }
+    return (ProcessStruct *)process; // Cast is ok due to struct defn.
 }
 
 int do_function_call(int func_number, arg_t *args, char *ret_string)
