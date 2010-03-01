@@ -1094,6 +1094,7 @@ ProcessStruct *do_context_switch(pid_t pid, int call)
             process = &processes[i];
             break;
         } else if (processes[i].p.process_id == 0) {
+            fprintf(stderr, "new GL process: %d  dpy: %08x\n", pid, parent_dpy);
             process = &processes[i];
             memset(process, 0, sizeof(ProcessState));
             process->p.process_id = pid;
