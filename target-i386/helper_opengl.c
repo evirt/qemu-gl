@@ -48,7 +48,7 @@ extern void init_process_tab(void);
 extern int do_function_call(ProcessStruct *process, int func_number, arg_t *args, char *ret_string);
 
 void do_disconnect_current(ProcessStruct *process);
-ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call);
+ProcessStruct *do_context_switch(pid_t pid, int call);
 
 #define disconnect_current() do_disconnect_current((process))
 
@@ -128,19 +128,17 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
     target_ulong saved_out_ptr[50];
     static char *ret_string = NULL;
     static arg_t args[50];
-    static Display *dpy = NULL;
     static ProcessStruct *process = NULL;
     static int first;
 
     if(!first) {
         first = 1;
-        dpy = XOpenDisplay(NULL);
         init_process_tab();
         ret_string = malloc(32768);
     }
 
     if (!process || process->process_id != pid) {
-        process = do_context_switch(dpy, pid, func_number);
+        process = do_context_switch(pid, func_number);
 	if(unlikely(func_number == _init32_func ||
                     func_number == _init64_func)) {
             if(!process->argcpy_target_to_host) {
