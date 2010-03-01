@@ -111,6 +111,7 @@ static void *get_glu_ptr(const char *name)
       }
 
 int display_function_call = 0;
+extern int kill_process;
 
 static const int defaultAttribList[] = {
     GLX_RGBA,
@@ -985,7 +986,7 @@ void _create_context(ProcessState *process, GLXContext ctxt, int fake_ctxt,
     process->nb_states++;
 }
 
-void do_disconnect_current(ProcessState *process)
+void do_disconnect(ProcessState *process)
 {
     int i;
     Display *dpy = process->dpy;
@@ -1076,7 +1077,7 @@ static const int beginend_allowed[GL_N_CALLS] = {
 
 ProcessStruct *do_context_switch(pid_t pid, int call)
 {
-    ProcessState *process;
+    ProcessState *process = NULL;
     int i;
 
     /* Lookup a process stuct. If there isnt one associated with this pid
@@ -1097,25 +1098,20 @@ ProcessStruct *do_context_switch(pid_t pid, int call)
             process->dpy = parent_dpy;
             break;
         }
+
     if (process == NULL) {
         fprintf(stderr, "Too many processes !\n");
         exit(-1);
     }
 
-    switch (call) {
-    case _init32_func:
-    case _init64_func:
-    case _exit_process_func:
-    case glXMakeCurrent_func:
-        /* Do nothing. In the case of glXMakeCurrent_func this avoids doing
-           two calls to glXMakeCurrent() on the host because the context
-           switch happens before the function call is processed */
-        break;
-
-    default:
-            glXMakeCurrent(process->dpy, process->current_state->drawable,
+    if(switch_gl_context) {
+//        fprintf(stderr, "Ctx switch: pid: %d    %08x %08x %08x\n", pid,
+//                process->dpy, process->current_state->drawable,
+//                process->current_state->context);
+        glXMakeCurrent(process->dpy, process->current_state->drawable,
                             process->current_state->context);
     }
+
     return (ProcessStruct *)process; // Cast is ok due to struct defn.
 }
 
@@ -1171,10 +1167,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case _synchronize_func:
         ret.i = 1;
-        break;
-
-    case _exit_process_func:
-        do_disconnect_current(process);
         break;
 
     case _changeWindowState_func:
