@@ -41,31 +41,19 @@ void helper_opengl(void)
 #else
 
 #include "opengl_func.h"
+#include "opengl_process.h"
+
 
 extern void init_process_tab(void);
 extern int do_function_call(int func_number, arg_t *args, char *ret_string);
 
-static int last_process_id = 0;
-
-static int argcpy_target_to_host_1_1(CPUState *env, void *host_addr,
-                                     target_ulong target_addr, int nb_args)
-{
-    int ret;
-    ret = cpu_memory_rw_debug(env, target_addr, host_addr, nb_args * sizeof(int), 0);
-    return ret?0:1;
-}
-
-static int wordsize = 0;
-static int (*argcpy_target_to_host) (CPUState *env, void *host_addr,
-                                     target_ulong target_addr, int nb_args) =
-    argcpy_target_to_host_1_1;
-
 void do_disconnect_current(void);
-void do_context_switch(Display *dpy, pid_t pid, int call);
+ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call);
+static ProcessStruct *last_process = NULL;
 
 static void disconnect_current(void)
 {
-    last_process_id = 0;
+    last_process = NULL;
 
     return do_disconnect_current();
 }
@@ -167,6 +155,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
     static char *ret_string = NULL;
     static arg_t args[50];
     static Display *dpy = NULL;
+    static ProcessStruct *process = NULL;
 
     if (dpy == NULL) {
         void *handle = dlopen("libanticrash.so", RTLD_LAZY);
@@ -201,34 +190,38 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
         return 0;
     }
 
-    if (last_process_id != pid) {
-        do_context_switch(dpy, pid, func_number);
-        last_process_id = pid;
+    if (!last_process || last_process->process_id != pid) {
+        process = do_context_switch(dpy, pid, func_number);
+	if(unlikely(func_number == _init32_func ||
+                    func_number == _init64_func)) {
+            if(!process->argcpy_target_to_host) {
+                if (func_number == _init32_func)
+                    process->argcpy_target_to_host = argcpy_target32_to_host;
+                else
+                    process->argcpy_target_to_host = argcpy_target64_to_host;
+            }
+            else {
+                fprintf(stderr, "attempt to init twice\n");
+            }
+        }
+        if(unlikely(!process->argcpy_target_to_host)) {
+            fprintf(stderr, "commands submitted before init.\n");
+            disconnect_current();
+            return 0;
+        }
+        last_process = process;
     }
 
-    if (unlikely(func_number == _exit_process_func))
-        last_process_id = 0;
-
-    if (!wordsize) {
-        if (func_number == _init32_func || func_number == _init64_func) {
-            if (func_number == _init32_func) {
-                wordsize = 32;
-                argcpy_target_to_host = argcpy_target32_to_host;
-            } else {
-                wordsize = 64;
-                argcpy_target_to_host = argcpy_target64_to_host;
-            }
-        } else
-            fprintf(stderr, "commands submitted before initialisation done\n");
+    if (unlikely(func_number == _exit_process_func)) {
+        disconnect_current();
+	return 0;
     }
 
     reset_host_offset();
 
     if (nb_args) {
-
-
 	//fprintf(stderr, "call %s pid=%d\n", tab_opengl_calls_name[func_number], pid);
-        if (argcpy_target_to_host(env, args, in_args, nb_args) == 0) {
+        if (process->argcpy_target_to_host(env, args, in_args, nb_args) == 0) {
             fprintf(stderr, "call %s pid=%d\n",
                     tab_opengl_calls_name[func_number], pid);
             fprintf(stderr, "cannot get call parameters\n");
@@ -527,26 +520,13 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             ret_string[0] = 0;
         }
 
-        if (func_number == _init32_func || func_number == _init64_func) {
-            if (func_number == _init32_func) {
-                if (wordsize != 32) {
-                    fprintf(stderr,
-                            "clients with different ABIs not supported\n");
-                    exit(-1);
-                }
-            } else {
-                if (wordsize != 64) {
-                    fprintf(stderr,
-                            "clients with different ABIs not supported\n");
-                    exit(-1);
-                }
-            }
-
+        if (unlikely(func_number == _init32_func || func_number == _init64_func)) {
             *(int *) args[1] = 1; // FIXME - pass alt. value if we use kvm ?
             ret = 0;
         } else {
             ret = do_function_call(func_number, args, ret_string);
         }
+
         for (i = 0; i < nb_args; i++) {
             switch (args_type[i]) {
               CASE_OUT_POINTERS:
