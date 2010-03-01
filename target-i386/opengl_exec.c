@@ -1030,7 +1030,7 @@ static const int beginend_allowed[GL_N_CALLS] = {
 #include "gl_beginend.h"
 };
 
-ProcessStruct *do_context_switch(pid_t pid, int call)
+ProcessStruct *do_context_switch(pid_t pid, int switch_gl_context)
 {
     ProcessState *process = NULL;
     int i;
@@ -1482,66 +1482,49 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             ClientGLXDrawable client_drawable = to_drawable(args[1]);
             GLXDrawable host_drawable = 0;
             int fake_ctxt = (int) args[2];
+            GLXContext ctxt = NULL;
 
             if (display_function_call)
                 fprintf(stderr, "client_drawable=%p fake_ctx=%d\n",
                         (void *) client_drawable, fake_ctxt);
 
             if (client_drawable == 0 && fake_ctxt == 0) {
-
                 /* Release context */
-
-                ret.i = glXMakeCurrent(dpy, 0, NULL);
                 process->current_state = &process->default_state;
-            } else if ((host_drawable = (GLXDrawable)
-                                    get_association_fakepbuffer_pbuffer(
-                                            process, client_drawable))) {
-
-                /* Lookup context if we have a valid drawable in the form of
-                 * a pixel buffer (pbuffer).
-                 * If it exists, use it. */
-
-                GLXContext ctxt = get_association_fakecontext_glxcontext(
-                                process, fake_ctxt);
-                if (ctxt == NULL) {
-                    fprintf(stderr, "invalid fake_ctxt (%d) (*)!\n",
-                                    fake_ctxt);
-                    ret.i = 0;
-                } else
-                    ret.i = glXMakeCurrent(dpy, host_drawable, ctxt);
-            } else {
-
-                /* Create an ordinary drawable if we have a valid context */
-
-                GLXContext ctxt = get_association_fakecontext_glxcontext(
-                                process, fake_ctxt);
-                if (ctxt == NULL) {
+            } else { /* look up host drawable and context */
+                ctxt = get_association_fakecontext_glxcontext(
+                              process, fake_ctxt);
+                if(!ctxt) {
                     fprintf(stderr, "invalid fake_ctxt (%d)!\n", fake_ctxt);
-                    ret.i = 0;
                 } else {
-                    host_drawable = get_association_clientdrawable_serverdrawable(
-                                    process, client_drawable);
-                    if (host_drawable == 0) {
-                        XVisualInfo *vis = get_association_fakecontext_visual(
-                                        process, fake_ctxt);
-                        if (vis == NULL)
-                            vis = get_default_visual(dpy);
-                        host_drawable = create_window(dpy, vis);
+                    /* If the host drawable is a pbuffer, lookup the associated
+                       context */
+                    host_drawable = (GLXDrawable)
+                                        get_association_fakepbuffer_pbuffer(
+                                                process, client_drawable);
+                    if(!host_drawable) {
+                        /* Else, create an ordinary drawable */
+                        host_drawable = get_association_clientdrawable_serverdrawable(
+                                        process, client_drawable);
+                        if (host_drawable == 0) {
+                            XVisualInfo *vis = get_association_fakecontext_visual(
+                                            process, fake_ctxt);
+                            if (vis == NULL)
+                                vis = get_default_visual(dpy);
+                            host_drawable = create_window(dpy, vis);
+    
+                            fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)host_drawable, (unsigned long int)client_drawable);
 
-                        fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)host_drawable, (unsigned long int)client_drawable);
-
-                        set_association_clientdrawable_serverdrawable(process,
-                                        client_drawable, host_drawable);
+                            set_association_clientdrawable_serverdrawable(process,
+                                            client_drawable, host_drawable);
+                        }
                     }
-
-                    ret.i = glXMakeCurrent(dpy, host_drawable, ctxt);
                 }
             }
 
-            if (ret.i) {
+            if(fake_ctxt) {
                 for (i = 0; i < process->nb_states; i ++) {
                     if (process->glstates[i]->fake_ctxt == fake_ctxt) {
-                        /* HACK !!! REMOVE  IM - I think this is correct actually*/
                         process->current_state = process->glstates[i];
                         process->current_state->drawable = host_drawable;
                         break;
@@ -1553,6 +1536,8 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                     exit(-1);
                 }
             }
+
+            ret.i = glXMakeCurrent(dpy, host_drawable, ctxt);
             break;
         }
 
