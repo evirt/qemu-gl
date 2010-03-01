@@ -49,14 +49,8 @@ extern int do_function_call(int func_number, arg_t *args, char *ret_string);
 
 void do_disconnect_current(void);
 ProcessStruct *do_context_switch(Display *dpy, pid_t pid, int call);
-static ProcessStruct *last_process = NULL;
 
-static void disconnect_current(void)
-{
-    last_process = NULL;
-
-    return do_disconnect_current();
-}
+#define disconnect_current() do_disconnect_current()
 
 static int argcpy_target32_to_host(CPUState *env, void *host_addr,
                                    target_ulong target_addr, int nb_args)
@@ -145,7 +139,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
         ret_string = malloc(32768);
     }
 
-    if (!last_process || last_process->process_id != pid) {
+    if (!process || process->process_id != pid) {
         process = do_context_switch(dpy, pid, func_number);
 	if(unlikely(func_number == _init32_func ||
                     func_number == _init64_func)) {
@@ -164,7 +158,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             disconnect_current();
             return 0;
         }
-        last_process = process;
     }
 
     if (unlikely(func_number == _exit_process_func)) {
