@@ -33,13 +33,6 @@
 #include "exec.h"
 #include "kvm.h"
 
-#if defined(CONFIG_USER_ONLY)
-void helper_opengl(void)
-{
-    /* TODO */
-}
-#else
-
 #include "opengl_func.h"
 #include "opengl_process.h"
 
@@ -91,12 +84,6 @@ static int argcpy_target64_to_host(CPUState *env, void *host_addr,
     }
 
     return 1;
-}
-
-static int host_offset = 0;
-static void reset_host_offset()
-{
-    host_offset = 0;
 }
 
 /* Return a host pointer with the content of [target_addr, target_addr + len bytes[ */
@@ -172,8 +159,6 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
         disconnect(process);
 	return 0;   // No need to continue - nothing to process.
     }
-
-    reset_host_offset();
 
     if (nb_args) {
 	//fprintf(stderr, "call %s pid=%d\n", tab_opengl_calls_name[func_number], pid);
@@ -447,4 +432,3 @@ int virtio_opengl_link(char *glbuffer) {
     return ret;
 }
 
-#endif
