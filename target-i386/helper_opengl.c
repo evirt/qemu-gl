@@ -109,13 +109,9 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
                            target_ulong target_ret_string,
                            target_ulong in_args, target_ulong in_args_size)
 {
-    Signature *signature = (Signature *) tab_opengl_calls[func_number];
-    int ret_type = signature->ret_type;
-    /* int has_out_parameters = signature->has_out_parameters; */
-    int nb_args = signature->nb_args;
-    int *args_type = signature->args_type;
-    int i;
-    int ret;
+    int ret_type, nb_args;
+    int *args_type;
+    int i, ret;
     int *args_size = NULL;
     target_ulong saved_out_ptr[50];
     static char *ret_string = NULL;
@@ -132,36 +128,39 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
     /* Select the appropriate context for this pid if it isnt already active */
     /* Note: if we're about to execute glXMakeCurrent() then we tell the
              renderer not to waste its time switching contexts */
-    if (!process || process->process_id != pid) {
-        process = do_context_switch(pid,
+    if (!process || process->process_id != pid)
+	process = do_context_switch(pid,
                                     (func_number == glXMakeCurrent_func)?0:1);
-	if(unlikely(func_number == _init32_func ||
-                    func_number == _init64_func)) {
-            if(!process->argcpy_target_to_host) {
-                if (func_number == _init32_func)
-                    process->argcpy_target_to_host = argcpy_target32_to_host;
-                else
-                    process->argcpy_target_to_host = argcpy_target64_to_host;
-            }
-            else {
-                fprintf(stderr, "attempt to init twice\n");
-            }
+
+    if(unlikely(func_number == _init32_func ||
+                func_number == _init64_func)) {
+        if(!process->argcpy_target_to_host) {
+            if (func_number == _init32_func)
+                process->argcpy_target_to_host = argcpy_target32_to_host;
+            else
+                process->argcpy_target_to_host = argcpy_target64_to_host;
+		return 1; // Initialisation OK
         }
-        if(unlikely(!process->argcpy_target_to_host)) {
-            if(func_number != _exit_process_func)
-                fprintf(stderr, "commands submitted before init.\n");
-            disconnect(process);
-            return 0;
+        else {
+            fprintf(stderr, "Attempt to init twice. Continuing regardless.\n");
         }
     }
 
-    if (unlikely(func_number == _exit_process_func)) {
+    if(unlikely(func_number == -1 || !process->argcpy_target_to_host)) {
+        if(!process->argcpy_target_to_host && !func_number != -1)
+            fprintf(stderr, "commands submitted before process init.\n");
         disconnect(process);
-	return 0;   // No need to continue - nothing to process.
+        return 0;
     }
+
+    do {
+        Signature *signature = (Signature *) tab_opengl_calls[func_number];
+        ret_type  = signature->ret_type;
+        nb_args   = signature->nb_args;
+        args_type = signature->args_type;
+    } while(0);
 
     if (nb_args) {
-	//fprintf(stderr, "call %s pid=%d\n", tab_opengl_calls_name[func_number], pid);
         if (process->argcpy_target_to_host(env, args, in_args, nb_args) == 0) {
             fprintf(stderr, "call %s pid=%d\n",
                     tab_opengl_calls_name[func_number], pid);
@@ -170,7 +169,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             return 0;
         }
 
-////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
         args_size =
             (int *) get_host_read_pointer(env, in_args_size,
                                           sizeof(int) * nb_args); //FIXMEIM - sizeof guest ?
@@ -334,13 +333,7 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
             ret_string[0] = 0;
         }
 
-        if (unlikely(func_number == _init32_func || func_number == _init64_func)) {
-            *(int *) args[1] = 1; // FIXME - pass alt. value if we use kvm ?
-            ret = 0;
-        } else {
-            // This function should never be passed _init32|64 or _exit_process
-            ret = do_function_call(process, func_number, args, ret_string);
-        }
+        ret = do_function_call(process, func_number, args, ret_string);
 
         for (i = 0; i < nb_args; i++) {
             switch (args_type[i]) {
@@ -408,13 +401,6 @@ int virtio_opengl_link(char *glbuffer) {
     cpu_synchronize_state(env);
 
     doing_opengl = 1;
-
-    if(i[0] == 4) {
-        if(i[6] == 1)
-            fprintf(stderr, "pid: %d   - death from kernel\n", i[1]);
-        else
-            fprintf(stderr, "pid: %d   - death from userspace\n", i[1]);
-    }
 
     kill_process = 0;
 
