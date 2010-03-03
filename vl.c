@@ -246,6 +246,7 @@ unsigned int nb_prom_envs = 0;
 const char *prom_envs[MAX_PROM_ENVS];
 #endif
 int boot_menu;
+int enable_gl;
 
 int nb_numa_nodes;
 uint64_t node_mem[MAX_NODES];
