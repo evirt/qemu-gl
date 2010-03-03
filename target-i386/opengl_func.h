@@ -302,8 +302,6 @@ static const int _synchronize_signature[] = { TYPE_INT, 0, 0 };
 static const int _serialized_calls_signature[] =
     { TYPE_NONE, 0, 1, TYPE_ARRAY_CHAR };
 
-static const int _exit_process_signature[] = { TYPE_NONE, 0, 0 };
-
 static const int _changeWindowState_signature[] =
     { TYPE_NONE, 0, 2, TYPE_INT, TYPE_INT };
 
