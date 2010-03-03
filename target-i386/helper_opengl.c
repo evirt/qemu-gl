@@ -105,7 +105,7 @@ int doing_opengl = 0;
 #include <dlfcn.h>
 #include <signal.h>
 
-static int decode_call_int(CPUState *env, int func_number, int pid,
+static inline int decode_call_int(CPUState *env, int func_number, int pid,
                            target_ulong target_ret_string,
                            target_ulong in_args, target_ulong in_args_size)
 {
@@ -118,6 +118,9 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
     static arg_t args[50];
     static ProcessStruct *process = NULL;
     static int first;
+
+    if(func_number < -1 || func_number > GL_N_CALLS)
+	return 0;
 
     if(!first) {
         first = 1;
@@ -371,32 +374,8 @@ static int decode_call_int(CPUState *env, int func_number, int pid,
     return ret;
 }
 
-static inline int decode_call(CPUState *env, int func_number, int pid,
-                       target_ulong target_ret_string, target_ulong in_args,
-                       target_ulong in_args_size)
-{
-    if (!(func_number >= 0 && func_number < GL_N_CALLS)) {
-        fprintf(stderr,
-                "func_number >= 0 && func_number < GL_N_CALLS failed\n");
-        return 0;
-    }
-
-    return decode_call_int(env, func_number, pid,
-                    target_ret_string, in_args, in_args_size);
-}
-
-void helper_opengl(void)
-{
-    doing_opengl = 1;
-    env->regs[R_EAX] =
-        decode_call(env, env->regs[R_EAX], env->regs[R_EBX], env->regs[R_ECX],
-                    env->regs[R_EDX], env->regs[R_ESI]);
-    doing_opengl = 0;
-}
-
 int virtio_opengl_link(char *glbuffer) {
     int *i = (int*)glbuffer;
-    int ret;
 
     cpu_synchronize_state(env);
 
@@ -404,8 +383,11 @@ int virtio_opengl_link(char *glbuffer) {
 
     kill_process = 0;
 
-    ret = decode_call(env, i[0], i[1], i[2], i[3], i[4]);
-    i[0] = ret;
+    i[0] = decode_call_int(env, (int)i[0],           /* func no */
+                                (int)i[1],           /* pid*/
+                                (target_ulong)i[2],  /* target_ret_string */
+                                (target_ulong)i[3],  /* in_args */
+                                (target_ulong)i[4]); /* in_args_size */
 
     if(kill_process)
         i[6] = 0xdeadbeef;
@@ -415,6 +397,6 @@ int virtio_opengl_link(char *glbuffer) {
     }
     doing_opengl = 0;
 	
-    return ret;
+    return i[0];
 }
 
