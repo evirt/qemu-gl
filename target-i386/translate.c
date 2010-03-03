@@ -2674,8 +2674,6 @@ static void gen_exception(DisasContext *s, int trapno, target_ulong cur_eip)
     s->is_jmp = 3;
 }
 
-int enable_gl = 0;
-
 /* an interrupt is different from an exception because of the
    privilege checks */
 static void gen_interrupt(DisasContext *s, int intno,
