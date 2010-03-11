@@ -33,13 +33,6 @@
 #include "exec.h"
 #include "kvm.h"
 
-#if defined(CONFIG_USER_ONLY)
-void helper_opengl(void)
-{
-    /* TODO */
-}
-#else
-
 #include "opengl_func.h"
 #include "opengl_process.h"
 
@@ -407,4 +400,3 @@ int virtio_opengl_link(char *glbuffer) {
     return i[0];
 }
 
-#endif
