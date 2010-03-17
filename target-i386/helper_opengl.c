@@ -107,7 +107,7 @@ int doing_opengl = 0;
 
 static inline int do_decode_call_int(int func_number, ProcessStruct *process, arg_t *args_in, int *args_size, target_ulong target_ret_string)
 {
-    Signature *signature = (Signature *) tab_opengl_calls[func_number];
+    Signature *signature;
     target_ulong saved_out_ptr[50];
     static char *ret_string = NULL;
     int i, ret;
@@ -118,10 +118,16 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
     if(!ret_string)
         ret_string = malloc(32768);
 
-    for (i = 0; i < signature->nb_args; i++)
-	total_size += args_size[i];
+//    for (i = 0; i < signature->nb_args; i++)
+//	total_size += args_size[i];
 
-    argptr = tmp = get_host_read_pointer(env, args_in, total_size);
+    argptr = args_in;//tmp = get_host_read_pointer(env, args_in, total_size);
+    func_number = *(short*)argptr;
+    argptr += 2;
+
+    signature = (Signature *) tab_opengl_calls[func_number];
+
+    tmp = argptr;
 
 //fprintf(stderr, "func: %d\n", func_number);
     for (i = 0; i < signature->nb_args; i++) {
@@ -178,8 +184,8 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
           CASE_IN_LENGTH_DEPENDING_ON_PREVIOUS_ARGS:
 	    args[i] = argptr;
             {
-                args_size[i] =
-                    compute_arg_length(stderr, func_number, i, args);
+//                args_size[i] =
+//                    compute_arg_length(stderr, func_number, i, args);
 //                args[i] = (args_size[i]) ? (arg_t)
  //                       get_host_read_pointer(env,
   //                                      args[i], args_size [i]) : 0;
@@ -315,6 +321,7 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
     return ret;
 }
 
+#if 0
 static void *decode_args(void *command_buffer, int *s_func_number, arg_t *s_args, int *s_args_size, long int fudge_factor)
 {
     Signature *signature;
@@ -390,13 +397,15 @@ static void *decode_args(void *command_buffer, int *s_func_number, arg_t *s_args
 
     return command_buffer;
 }
+#endif
 
 static inline int decode_call_int(CPUState *env, int func_number, int pid,
                            target_ulong target_ret_string,
-                           target_ulong in_args, target_ulong in_args_size)
+                           target_ulong in_args, target_ulong in_args_size,
+			   int args_len, int args_size_len)
 {
     int *args_size = NULL;
-    static arg_t args[50];
+    int *args = NULL;
     static ProcessStruct *process = NULL;
     static int first;
 
@@ -436,8 +445,9 @@ static inline int decode_call_int(CPUState *env, int func_number, int pid,
         return 0;
     }
 
-    Signature *signature = (Signature *) tab_opengl_calls[func_number];
+//    Signature *signature = (Signature *) tab_opengl_calls[func_number];
 
+#if 0
     if (signature->nb_args) {
         if (process->argcpy_target_to_host(env, args, in_args, signature->nb_args) == 0) {
             fprintf(stderr, "call %s pid=%d\n",
@@ -446,11 +456,11 @@ static inline int decode_call_int(CPUState *env, int func_number, int pid,
             disconnect(process);
             return 0;
         }
-
+#endif
         ////////////////////////////////////////////////////////////////////////
         args_size =
             (int *) get_host_read_pointer(env, in_args_size,
-                                          sizeof(int) * signature->nb_args); //FIXMEIM - sizeof guest ?
+                                          args_size_len); //FIXMEIM - sizeof guest ?
         if (args_size == NULL) {
             fprintf(stderr, "call %s pid=%d\n",
                     tab_opengl_calls_name[func_number], pid);
@@ -458,13 +468,15 @@ static inline int decode_call_int(CPUState *env, int func_number, int pid,
             disconnect(process);
             return 0;
         }
-    }
+	args = (int *) get_host_read_pointer(env, in_args, args_len);
+//    }
 
-    if(func_number != _serialized_calls_func)
-        return do_decode_call_int(func_number, process, in_args, args_size, target_ret_string);
+//    if(func_number != _serialized_calls_func)
+        return do_decode_call_int(func_number, process, args, args_size, target_ret_string);
+#if 0
     else {
         /* Replay serialised calls */
-        void *s_cmd_buffer = (void *)get_host_read_pointer(env, args[0], args_size[0]);
+        void *s_cmd_buffer = (void *)get_host_read_pointer(env, in_args, args_size[0]);
         int s_cmd_buffer_size = args_size[0];
 	int orig = s_cmd_buffer_size;
         void *s_cmd_buffer_end = s_cmd_buffer + s_cmd_buffer_size;
@@ -481,6 +493,7 @@ static inline int decode_call_int(CPUState *env, int func_number, int pid,
         }
     }
     return 0;
+#endif
 }
 
 int virtio_opengl_link(char *glbuffer) {
@@ -496,7 +509,9 @@ int virtio_opengl_link(char *glbuffer) {
                                 (int)i[1],           /* pid*/
                                 (target_ulong)i[2],  /* target_ret_string */
                                 (target_ulong)i[3],  /* in_args */
-                                (target_ulong)i[4]); /* in_args_size */
+                                (target_ulong)i[4], /* in_args_size */
+                                (target_ulong)i[10], /* args_len */
+                                (target_ulong)i[11]); /* args_size_len */
 
     if(kill_process)
         i[6] = 0xdeadbeef;
