@@ -86,26 +86,12 @@ static int argcpy_target64_to_host(CPUState *env, void *host_addr,
     return 1;
 }
 
-/* Return a host pointer with the content of [target_addr, target_addr + len bytes[ */
-/* Do not free or modify */
-static const void *get_host_read_pointer(CPUState *env,
-                target_ulong target_addr, int len)
-{
-	// FIXMEIM - HUGE memory leak here
-	void *ret = malloc(len);
-        if(cpu_memory_rw_debug(env, target_addr, ret, len, 0)) {
-		fprintf(stderr, "mapping FAIL\n");
-		return NULL;
-	}
-        return ret;
-}
-
 int doing_opengl = 0;
 
 #include <dlfcn.h>
 #include <signal.h>
 
-static inline int do_decode_call_int(int func_number, ProcessStruct *process, arg_t *args_in, int *args_size, target_ulong target_ret_string, int args_len)
+static inline int do_decode_call_int(int func_number, ProcessStruct *process, arg_t *args_in, int args_len, char *r_buffer)
 {
     Signature *signature;
     target_ulong saved_out_ptr[50];
@@ -127,6 +113,7 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
 
     argptr = args_in;
 
+//fprintf(stderr, "ab_off: cmd_start: %08x\n", (int)argptr-(int)args_in + 0x2c);
     while((char*)argptr < (char*)args_in + args_len) {
     func_number = *(short*)argptr;
     argptr += 2;
@@ -137,6 +124,9 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
 
 //fprintf(stderr, "func: %d\n", func_number);
     for (i = 0; i < signature->nb_args; i++) {
+//fprintf(stderr, "ab_off: paran: %08x\n", (int)argptr-(int)args_in +0x2c);
+        int args_size = *(int*)argptr;
+	argptr+=4;
 //fprintf(stderr, "ca: %02d - %08x\n", signature->args_type[i], argptr-tmp);
         switch (signature->args_type[i]) {
         case TYPE_UNSIGNED_INT:
@@ -152,20 +142,20 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
         case TYPE_NULL_TERMINATED_STRING:
           CASE_IN_UNKNOWN_SIZE_POINTERS:
             if(*(int*)argptr) args[i] = argptr+4; else args[i] = NULL; argptr += 4;
-            if (args[i] == 0 && *args_size == 0) {
+            if (args[i] == 0 && args_size == 0) {
                 if (!IS_NULL_POINTER_OK_FOR_FUNC(func_number)) {
                     fprintf(stderr, "call %s arg %d pid=%d\n",
                             tab_opengl_calls_name[func_number], i, process->process_id);
                     disconnect(process);
                     return 0;
                 }
-            } else if (args[i] == 0 && *args_size != 0) {
+            } else if (args[i] == 0 && args_size != 0) {
                 fprintf(stderr, "call %s arg %d pid=%d\n",
                         tab_opengl_calls_name[func_number], i, process->process_id);
                 fprintf(stderr, "A) args[i] == 0 && args_size[i] != 0 !!\n");
                 disconnect(process);
                 return 0;
-            } else if (args[i] != 0 && *args_size == 0) {
+            } else if (args[i] != 0 && args_size == 0) {
                 fprintf(stderr, "call %s arg %d pid=%d\n",
                         tab_opengl_calls_name[func_number], i, process->process_id);
                 fprintf(stderr, "B) args[i] != 0 && args_size[i] == 0 !!\n");
@@ -179,11 +169,11 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
             {
 //                args_size[i] =
 //                    compute_arg_length(stderr, func_number, i, args);
-                if (args[i] == 0 && *args_size != 0) {
+                if (args[i] == 0 && args_size != 0) {
                     fprintf(stderr, "call %s arg %d pid=%d\n",
                             tab_opengl_calls_name[func_number], i, process->process_id);
                     fprintf(stderr, "C) can not get %d bytes\n",
-                            *args_size);
+                            args_size);
                     disconnect(process);
                     return 0;
                 }
@@ -198,7 +188,7 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
 //                    saved_out_ptr[i] = 0;
 //                    continue;
 //                }
-                if (args[i] == 0 && *args_size == 0) {
+                if (args[i] == 0 && args_size == 0) {
                     if (!IS_NULL_POINTER_OK_FOR_FUNC(func_number)) {
                         fprintf(stderr, "D) all %s arg %d pid=%d\n",
                                 tab_opengl_calls_name[func_number], i,
@@ -210,14 +200,14 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
                             tab_opengl_calls_name[func_number], i, process->process_id);
                     disconnect(process);
                     return 0;
-                } else if (args[i] == 0 && *args_size != 0) {
+                } else if (args[i] == 0 && args_size != 0) {
                     fprintf(stderr, "call %s arg %d pid=%d\n",
                             tab_opengl_calls_name[func_number], i, process->process_id);
                     fprintf(stderr,
                             "F) args[i] == 0 && args_size[i] != 0 !!\n");
                     disconnect(process);
                     return 0;
-                } else if (args[i] != 0 && *args_size == 0) {
+                } else if (args[i] != 0 && args_size == 0) {
                     fprintf(stderr, "call %s arg %d pid=%d\n",
                             tab_opengl_calls_name[func_number], i, process->process_id);
                     fprintf(stderr,
@@ -226,8 +216,8 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
                     return 0;
                 }
                 if (saved_out_ptr[i]) {
-                    saved_out_size[i] = *args_size;
-                    args[i] = (arg_t) malloc(*args_size);
+                    saved_out_size[i] = args_size;
+                    args[i] = (arg_t) malloc(args_size);
                 }
                 break;
             }   // End of CASE_OUT_POINTERS:
@@ -236,7 +226,7 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
         case TYPE_DOUBLE:
           CASE_IN_KNOWN_SIZE_POINTERS:
             if(*(int*)argptr) args[i] = argptr+4; else args[i] = NULL; argptr += 4;
-            if (args[i] == 0 && *args_size != 0) {
+            if (args[i] == 0 && args_size != 0) {
                 fprintf(stderr, "call %s arg %d pid=%d\n",
                         tab_opengl_calls_name[func_number], i, process->process_id);
                 fprintf(stderr, "H) can not get %d bytes\n",
@@ -256,7 +246,7 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
             disconnect(process);
             return 0;
         }
-	argptr += *args_size++;
+	argptr += args_size;
     }
 
     if (signature->ret_type == TYPE_CONST_CHAR) {
@@ -272,12 +262,9 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
           CASE_OUT_POINTERS:
             {
                 if (saved_out_ptr[i]) {
-                    if (cpu_memory_rw_debug(env, saved_out_ptr[i], (void *) args[i], saved_out_size[i], 1)) {
-                        fprintf(stderr, "could not copy out parameters "
-                                        "back to user space\n");
-                        disconnect(process);
-                        return 0;
-                    }
+		    *(int*)r_buffer = saved_out_size[i]; r_buffer += 4;
+		    memcpy(r_buffer, args[i], saved_out_size[i]);
+                    r_buffer += saved_out_size[i];
                     free((void *) args[i]);
                 }
                 break;
@@ -287,26 +274,25 @@ static inline int do_decode_call_int(int func_number, ProcessStruct *process, ar
         }
     }
 
-    if (signature->ret_type == TYPE_CONST_CHAR)
-        if (target_ret_string) {
-            if (cpu_memory_rw_debug(env, target_ret_string, (void *)ret_string, strlen(ret_string) + 1, 1)) {
-                fprintf(stderr, "cannot copy out parameters "
-                                "back to user space\n");
-                disconnect(process);
-                return 0;
-            }
-        }
+    switch(signature->ret_type) {
+      case TYPE_CONST_CHAR:
+	memcpy(r_buffer, ret_string, strlen(ret_string) + 1);
+	break;
+      case TYPE_INT:
+        memcpy(r_buffer, &ret, sizeof(int));
+        break;
+      case TYPE_CHAR:
+        *r_buffer = ret & 0xff;
+        break;
+    }
 
     return ret;
 }
 
 static inline int decode_call_int(CPUState *env, int func_number, int pid,
-                           target_ulong target_ret_string,
-                           target_ulong in_args, target_ulong in_args_size,
-			   int args_len, int args_size_len)
+                           target_ulong in_args,
+			   int args_len, char *r_buffer)
 {
-    int *args_size = NULL;
-    int *args = NULL;
     static ProcessStruct *process = NULL;
     static int first;
     int ret;
@@ -333,7 +319,8 @@ static inline int decode_call_int(CPUState *env, int func_number, int pid,
                 process->argcpy_target_to_host = argcpy_target32_to_host;
             else
                 process->argcpy_target_to_host = argcpy_target64_to_host;
-		return 2; // Initialisation OK
+            *(int*)r_buffer = 2;
+            return 0; // Initialisation OK
         }
         else {
             fprintf(stderr, "Attempt to init twice. Continuing regardless.\n");
@@ -348,61 +335,39 @@ static inline int decode_call_int(CPUState *env, int func_number, int pid,
     }
 
     ////////////////////////////////////////////////////////////////////////
-    args_size =
-        (int *) get_host_read_pointer(env, in_args_size, args_size_len); //FIXMEIM - sizeof guest ?
-    args = (int *) get_host_read_pointer(env, in_args, args_len);
 
-        ret = do_decode_call_int(func_number, process, args, args_size, target_ret_string, args_len);
+    ret = do_decode_call_int(func_number, process, in_args, args_len, r_buffer);
 
-	free(args);
-	free(args_size);
-#if 0
-    else {
-        /* Replay serialised calls */
-        void *s_cmd_buffer = (void *)get_host_read_pointer(env, in_args, args_size[0]);
-        int s_cmd_buffer_size = args_size[0];
-	int orig = s_cmd_buffer_size;
-        void *s_cmd_buffer_end = s_cmd_buffer + s_cmd_buffer_size;
-	long int fudge_factor = s_cmd_buffer-args[0];
-
-//	fprintf(stderr, "Serialised buffer: %08x %d\n", s_cmd_buffer, s_cmd_buffer_size);
-
-        while(s_cmd_buffer < s_cmd_buffer_end) {
-            arg_t s_args[50];
-            int s_args_size[50];
-            int s_func_number;
-            s_cmd_buffer = decode_args(s_cmd_buffer, &s_func_number, s_args, s_args_size, fudge_factor);
-            do_decode_call_int(s_func_number, process, s_args, s_args_size, 0);
-        }
-    }
-#endif
     return ret;
 }
 
-int virtio_opengl_link(char *glbuffer) {
+int virtio_opengl_link(char *glbuffer, char *r_buffer) {
     int *i = (int*)glbuffer;
 
-    cpu_synchronize_state(env);
+    int j, gl_ret;
+
+//    cpu_synchronize_state(env);
+
+//    for(j = 0 ; j < 20 ; j++)
+//	fprintf(stderr, "rx: %08x\n", ((int*)glbuffer)[j]);
 
     doing_opengl = 1;
 
     kill_process = 0;
 
-    i[0] = decode_call_int(env, (int)i[0],           /* func no */
-                                (int)i[1],           /* pid*/
-                                (target_ulong)i[2],  /* target_ret_string */
-                                (target_ulong)i[3],  /* in_args */
-                                (target_ulong)i[4], /* in_args_size */
-                                (target_ulong)i[10], /* args_len */
-                                (target_ulong)i[11]); /* args_size_len */
+    gl_ret = decode_call_int(env, (int)i[0],            /* func no */
+                                  (int)i[1],            /* pid*/
+                                  (char*)&i[11],        /* in_args */
+                                  (target_ulong)i[10],  /* args_len */
+				  r_buffer);
 
     if(kill_process)
         i[6] = 0xdeadbeef;
 
-    if (cpu_memory_rw_debug(env, i[5], (void *) i, 7*4, 1)) {
-        fprintf (stderr, "couldnt write back return code\n");
-    }
+//    if (cpu_memory_rw_debug(env, i[5], (void *) i, 7*4, 1)) {
+//        fprintf (stderr, "couldnt write back return code\n");
+//    }
     doing_opengl = 0;
 	
-    return i[0];
+    return gl_ret;
 }

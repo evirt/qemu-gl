@@ -30,33 +30,63 @@ typedef struct VirtIOGL
 //    int pool;
 } VirtIOGL;
 
-extern int virtio_opengl_link(char *buffer);
+extern int virtio_opengl_link(char *buffer, char *r_buffer);
 
 static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
 {
 	VirtQueueElement elem;
+    int gl_ret;
+    char *buffer, *ptr;
+    char *r_buffer = NULL;
+	int length;
+	int rlength;
+        size_t ret = 0;
+//	int cks = 0;
+//	char *b;
+//	int lenny;
 
-//	fprintf(stderr, "handle_gl\n");
-    while (virtqueue_pop(vq, &elem)) {
-        size_t ret;
+	while(virtqueue_pop(vq, &elem)) {
+		int i = 0;
+		length = ((int*)elem.out_sg[0].iov_base)[10] + 44;
+		rlength = ((int*)elem.out_sg[0].iov_base)[9];
+		ptr = buffer = malloc(length);
+		if(rlength)
+			r_buffer = malloc(rlength);
 
-        /* The guest always sends only one sg */
-//        fprintf(stderr, " %08x %d\n", (unsigned int)(long)elem.out_sg[0].iov_base,
-//                                    (int)elem.out_sg[0].iov_len);
+//		fprintf(stderr, "f: %d l:%d\n", ((int*)elem.out_sg[0].iov_base)[0], length);
+		while(length){
+			int next = length;
+			if(next > elem.out_sg[i].iov_len)
+				next = elem.out_sg[i].iov_len;
+			memcpy(ptr, (char *)elem.out_sg[i].iov_base, next);
+			ptr += next;
+			ret += next;
+			i++;
+			length -= next;
+		}
 
-//	fprintf(stderr, "%s\n", (char *)elem.out_sg[0].iov_base);
-	virtio_opengl_link((char *)elem.out_sg[0].iov_base);
-	
-	ret = elem.out_sg[0].iov_len;
+		gl_ret = virtio_opengl_link(buffer, r_buffer);
+		free(buffer);
 
-        virtqueue_push(vq, &elem, ret);
-    }
-    virtio_notify(vdev, vq);
+		i = 0;
+		ptr = r_buffer;
+		while(rlength) {
+			int next = rlength;
+			if(next > elem.in_sg[i].iov_len)
+				next = elem.in_sg[i].iov_len;
+			memcpy(elem.in_sg[i].iov_base, ptr, next);
+			ptr += next;
+			rlength -= next;
+			i++;
+		}
 
-    // Write the result back...
+		if(r_buffer)
+		    free(r_buffer);
 
+		virtqueue_push(vq, &elem, ret);
 
-
+		virtio_notify(vdev, vq);
+	}
 }
 
 static uint32_t virtio_gl_get_features(VirtIODevice *vdev, uint32_t f)
