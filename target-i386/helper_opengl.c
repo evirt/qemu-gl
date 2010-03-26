@@ -120,8 +120,6 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
 
           CASE_OUT_POINTERS:
             {
-//		void *save = *(int*)argptr;
-//                saved_out_ptr[i] = *(int*)argptr;
                 if(*(int*)argptr) {
                     *(int*)r_buffer = args_size; r_buffer+=4;
                     args[i] = (arg_t) r_buffer;//(arg_t)argptr+4;
@@ -129,10 +127,6 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
                 else
                     args[i] = (arg_t)NULL;
                 argptr += 4;
-//                if (func_number == glXQueryExtension_func && args[i] == 0) {
-//                    saved_out_ptr[i] = 0;
-//                    continue;
-//                }
                 if (args[i] == 0 && args_size == 0) {
                     if (!IS_NULL_POINTER_OK_FOR_FUNC(func_number)) {
                         fprintf(stderr, "D) all %s arg %d pid=%d\n",

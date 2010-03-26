@@ -12,10 +12,7 @@
  */
 
 #include "hw.h"
-//#include "qemu-char.h"
 #include "virtio.h"
-//#include "virtio-rng.h"
-//#include "rng.h"
 #include <sys/time.h>
 
 int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer);
@@ -129,21 +126,6 @@ VirtIODevice *virtio_gl_init(DeviceState *dev)
     s->vdev.get_features = virtio_gl_get_features;
 
     s->vq = virtio_add_queue(&s->vdev, 128, virtio_gl_handle);
-//    s->chr = rngdev->chrdev;
- //   s->rate = rngdev->rate;
-//    gettimeofday(&s->last, NULL);
-
-//    if(rngdev->proto && !strncmp(rngdev->proto, "egd", 3))
-//        s->egd = 1;
-
-#ifdef DEBUG
-//    printf("entropy being read from %s", rngdev->chrdev->label);
-//    if(s->rate)
-//        printf(" at %d bytes/sec max.", s->rate);
-//    printf(" protocol: %s\n", s->egd?"egd":"raw");
-#endif
-
-//    qemu_chr_add_handlers(s->chr, vgl_can_read, vgl_read, vgl_event, s);
 
     register_savevm("virtio-gl", -1, 1, virtio_gl_save, virtio_gl_load, s);
 
