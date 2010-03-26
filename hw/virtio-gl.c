@@ -18,75 +18,78 @@
 //#include "rng.h"
 #include <sys/time.h>
 
+int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer);
+
+
 typedef struct VirtIOGL
 {
     VirtIODevice vdev;
     VirtQueue *vq;
-//    CharDriverState *chr;
-//    struct timeval last;
-//    int rate;
-//    int egd;
-//    int entropy_remaining;
-//    int pool;
 } VirtIOGL;
 
-extern int virtio_opengl_link(char *buffer, char *r_buffer);
+#define SIZE_OUT_HEADER (4*3)
+#define SIZE_IN_HEADER 4
 
 static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
 {
-	VirtQueueElement elem;
-    int gl_ret;
-    char *buffer, *ptr;
-    char *r_buffer = NULL;
-	int length;
-	int rlength;
-        size_t ret = 0;
-//	int cks = 0;
-//	char *b;
-//	int lenny;
+    VirtQueueElement elem;
 
-	while(virtqueue_pop(vq, &elem)) {
-		int i = 0;
-		length = ((int*)elem.out_sg[0].iov_base)[10] + 44;
-		rlength = ((int*)elem.out_sg[0].iov_base)[9];
-		ptr = buffer = malloc(length);
-		if(rlength)
-			r_buffer = malloc(rlength);
+    while(virtqueue_pop(vq, &elem)) {
+        int i;
+        int length = ((int*)elem.out_sg[0].iov_base)[1];
+        int r_length = ((int*)elem.out_sg[0].iov_base)[2];
+	int ret = 0;
+        char *buffer, *ptr;
+        char *r_buffer = NULL;
+	int *i_buffer;
 
-//		fprintf(stderr, "f: %d l:%d\n", ((int*)elem.out_sg[0].iov_base)[0], length);
-		while(length){
-			int next = length;
-			if(next > elem.out_sg[i].iov_len)
-				next = elem.out_sg[i].iov_len;
-			memcpy(ptr, (char *)elem.out_sg[i].iov_base, next);
-			ptr += next;
-			ret += next;
-			i++;
-			length -= next;
-		}
+	if(length < SIZE_OUT_HEADER || r_length < SIZE_IN_HEADER)
+		goto done;
 
-		gl_ret = virtio_opengl_link(buffer, r_buffer);
-		free(buffer);
+	buffer = malloc(length);
+        r_buffer = malloc(r_length);
+	ptr = buffer;
+        i_buffer = (int*)buffer;
 
-		i = 0;
-		ptr = r_buffer;
-		while(rlength) {
-			int next = rlength;
-			if(next > elem.in_sg[i].iov_len)
-				next = elem.in_sg[i].iov_len;
-			memcpy(elem.in_sg[i].iov_base, ptr, next);
-			ptr += next;
-			rlength -= next;
-			i++;
-		}
+        i = 0;
+        while(length){
+            int next = length;
+            if(next > elem.out_sg[i].iov_len)
+                next = elem.out_sg[i].iov_len;
+            memcpy(ptr, (char *)elem.out_sg[i].iov_base, next);
+            ptr += next;
+            ret += next;
+            i++;
+            length -= next;
+        }
 
-		if(r_buffer)
-		    free(r_buffer);
+        *(int*)r_buffer = decode_call_int(i_buffer[0], /* pid */
+                        buffer + SIZE_OUT_HEADER, /* command_buffer */
+                        i_buffer[1] - SIZE_OUT_HEADER, /* cmd buffer length */
+                        r_buffer + SIZE_IN_HEADER);    /* return buffer */
 
-		virtqueue_push(vq, &elem, ret);
+        free(buffer);
 
-		virtio_notify(vdev, vq);
-	}
+	if(r_length)
+		ret = r_length;
+        i = 0;
+        ptr = r_buffer;
+        while(r_length) {
+            int next = r_length;
+            if(next > elem.in_sg[i].iov_len)
+                next = elem.in_sg[i].iov_len;
+            memcpy(elem.in_sg[i].iov_base, ptr, next);
+            ptr += next;
+            r_length -= next;
+            i++;
+        }
+
+        free(r_buffer);
+done:
+        virtqueue_push(vq, &elem, ret);
+
+        virtio_notify(vdev, vq);
+    }
 }
 
 static uint32_t virtio_gl_get_features(VirtIODevice *vdev, uint32_t f)

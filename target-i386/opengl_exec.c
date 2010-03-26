@@ -945,16 +945,10 @@ void do_disconnect(ProcessState *process)
     int i;
     Display *dpy = process->dpy;
 
-    if(process->p.argcpy_target_to_host == 0xfeed) {
-	fprintf(stderr, "Double_disconnect\n");
-	return;
-    }
-
-    if(!process->p.argcpy_target_to_host)
+    if(!process->p.wordsize)
         fprintf(stderr, "Likely died prior to init: pid %d\n", process->p.process_id);
     else 
         fprintf("disconnect GL process: %d\n", process->p.process_id);
-    process->p.argcpy_target_to_host = (void*)0xfeed;
 
     glXMakeCurrent(dpy, 0, NULL);
 
@@ -1313,7 +1307,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
             GLXContext shareList = get_association_fakecontext_glxcontext(
                             process, fake_shareList);
-fprintf(stderr, "getassoc: a\n");
             XVisualInfo *vis = get_visual_info_from_visual_id(dpy, visualid);
             GLXContext ctxt;
 
@@ -1360,7 +1353,6 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 int fake_shareList = args[3];
                 GLXContext shareList = get_association_fakecontext_glxcontext(
                                 process, fake_shareList);
-fprintf(stderr, "getassoc: b\n");
                 process->next_available_context_number++;
                 int fake_ctxt = process->next_available_context_number;
                 GLXContext ctxt = ptr_func_glXCreateNewContext(
@@ -1382,7 +1374,6 @@ fprintf(stderr, "getassoc: b\n");
             GLXContext src_ctxt;
             GLXContext dst_ctxt;
 
-fprintf(stderr, "getassoc: cish\n");
             if (display_function_call)
                 fprintf(stderr, "fake_src_ctxt=%i, fake_dst_ctxt=%i\n",
                         fake_src_ctxt, fake_dst_ctxt);
@@ -1411,7 +1402,6 @@ fprintf(stderr, "getassoc: cish\n");
 
             GLXContext ctxt = get_association_fakecontext_glxcontext(
                             process, fake_ctxt);
-fprintf(stderr,"getassoc: d\n");
             if (ctxt == NULL) {
                 fprintf(stderr, "invalid fake_ctxt (%p) !\n",
                         (void *) (long) fake_ctxt);
@@ -1466,7 +1456,6 @@ fprintf(stderr,"getassoc: d\n");
                         glXDestroyContext(dpy, ctxt);
                         unset_association_fakecontext_glxcontext(
                                         process, fake_ctxt);
-fprintf(stderr, "unsetassoc: e\n");
 
                         break;
                     }
@@ -1505,7 +1494,6 @@ fprintf(stderr, "unsetassoc: e\n");
             } else { /* look up host drawable and context */
                 ctxt = get_association_fakecontext_glxcontext(
                               process, fake_ctxt);
-fprintf(stderr,"getassoc: f\n");
                 if(!ctxt) {
                     fprintf(stderr, "invalid fake_ctxt (%d)!\n", fake_ctxt);
                 } else {
@@ -1643,7 +1631,6 @@ fprintf(stderr,"getassoc: f\n");
                 fprintf(stderr, "fake_ctx=%x\n", fake_ctxt);
             GLXContext ctxt =
                 get_association_fakecontext_glxcontext(process, fake_ctxt);
-fprintf(stderr,"getassoc: g\n");
             if (ctxt == NULL) {
                 fprintf(stderr, "invalid fake_ctxt (%x) !\n", fake_ctxt);
                 ret.c = False;
@@ -2031,7 +2018,6 @@ fprintf(stderr,"getassoc: g\n");
                 fprintf(stderr, "fake_ctx=%i\n", fake_ctxt);
             GLXContext ctxt =
                 get_association_fakecontext_glxcontext(process, fake_ctxt);
-fprintf(stderr,"getassoc: h\n");
             if (ctxt == NULL) {
                 fprintf(stderr, "invalid fake_ctxt (%i) !\n", fake_ctxt);
                 ret.i = 0;
@@ -2094,7 +2080,6 @@ fprintf(stderr,"getassoc: h\n");
             if (fbconfig) {
                 GLXContext shareList = get_association_fakecontext_glxcontext(
                                 process, (int) args[3]);
-fprintf(stderr,"getassoc: i\n");
                 process->next_available_context_number++;
                 int fake_ctxt = process->next_available_context_number;
                 GLXContext ctxt = ptr_func_glXCreateContextWithConfigSGIX(
