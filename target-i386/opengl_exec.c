@@ -37,9 +37,6 @@
 #include <mesa_gl.h>
 #include <mesa_glx.h>
 
-// FIXME - probably breaks badly on 32 bit host w/ 64 bit guest
-//typedef long unsigned int target_phys_addr_t;
-
 #include "exec.h"
 
 #include "opengl_func.h"
