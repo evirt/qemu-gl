@@ -2,6 +2,7 @@
  *  Host-side implementation of GL/GLX API
  *
  *  Copyright (c) 2006,2007 Even Rouault
+ *  Copyright (c) 2009,2010 Ian Molton <ian.molton@collabora.co.uk>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +23,6 @@
  * THE SOFTWARE.
  */
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -33,20 +33,16 @@
 
 #define GL_GLEXT_PROTOTYPES
 #define GLX_GLXEXT_PROTOTYPES
-
 #include <mesa_gl.h>
 #include <mesa_glx.h>
 
-#include "exec.h"
-
 #include "opengl_func.h"
-
-#include "mesa_glu.h"
-#include "mesa_mipmap.c"
-
-#include "../qemu-common.h"
-
+#include "mesa_mipmap.h"
 #include "opengl_process.h"
+
+void *qemu_malloc(size_t size);
+void *qemu_realloc(void *ptr, size_t size);
+void qemu_free(void *ptr);
 
 #define glGetError() 0
 
@@ -679,7 +675,7 @@ static int glXChooseVisualFunc(Display *dpy, const int *_attribList)
         _compute_length_of_attrib_list_including_zero(_attribList, 0);
     int i;
 
-    int *attribList = malloc(sizeof(int) * attribListLength);
+    int *attribList = qemu_malloc(sizeof(int) * attribListLength);
     memcpy(attribList, _attribList, sizeof(int) * attribListLength);
 
     i = 0;
@@ -703,7 +699,7 @@ static int glXChooseVisualFunc(Display *dpy, const int *_attribList)
         if (tabAssocAttribListVisual[i].attribListLength == attribListLength
             && memcmp(tabAssocAttribListVisual[i].attribList, attribList,
                       attribListLength * sizeof(int)) == 0) {
-            free(attribList);
+            qemu_free(attribList);
             return (tabAssocAttribListVisual[i].
                     visInfo) ? tabAssocAttribListVisual[i].visInfo->
                 visualid : 0;
@@ -711,18 +707,18 @@ static int glXChooseVisualFunc(Display *dpy, const int *_attribList)
     }
     XVisualInfo *visInfo = glXChooseVisual(dpy, 0, attribList);
 
-    tabAssocAttribListVisual = realloc(
+    tabAssocAttribListVisual = qemu_realloc(
                     tabAssocAttribListVisual, sizeof(AssocAttribListVisual) *
                     (nTabAssocAttribListVisual + 1));
     tabAssocAttribListVisual[nTabAssocAttribListVisual].attribListLength =
         attribListLength;
     tabAssocAttribListVisual[nTabAssocAttribListVisual].attribList =
-        (int *) malloc(sizeof(int) * attribListLength);
+        (int *) qemu_malloc(sizeof(int) * attribListLength);
     memcpy(tabAssocAttribListVisual[nTabAssocAttribListVisual].attribList,
            attribList, sizeof(int) * attribListLength);
     tabAssocAttribListVisual[nTabAssocAttribListVisual].visInfo = visInfo;
     nTabAssocAttribListVisual++;
-    free(attribList);
+    qemu_free(attribList);
     return (visInfo) ? visInfo->visualid : 0;
 }
 
@@ -742,7 +738,7 @@ static XVisualInfo *get_visual_info_from_visual_id(Display *dpy,
     template.visualid = visualid;
     visInfo = XGetVisualInfo(dpy, VisualIDMask, &template, &n);
     tabAssocAttribListVisual =
-        realloc(tabAssocAttribListVisual,
+        qemu_realloc(tabAssocAttribListVisual,
                 sizeof(AssocAttribListVisual) * (nTabAssocAttribListVisual +
                                                  1));
     tabAssocAttribListVisual[nTabAssocAttribListVisual].attribListLength = 0;
@@ -800,41 +796,41 @@ static void destroy_gl_state(GLState *state)
     int i;
 
     if (state->vertexPointer)
-        free(state->vertexPointer);
+        qemu_free(state->vertexPointer);
     if (state->normalPointer)
-        free(state->normalPointer);
+        qemu_free(state->normalPointer);
     if (state->indexPointer)
-        free(state->indexPointer);
+        qemu_free(state->indexPointer);
     if (state->colorPointer)
-        free(state->colorPointer);
+        qemu_free(state->colorPointer);
     if (state->secondaryColorPointer)
-        free(state->secondaryColorPointer);
+        qemu_free(state->secondaryColorPointer);
     for (i = 0; i < NB_MAX_TEXTURES; i++) {
         if (state->texCoordPointer[i])
-            free(state->texCoordPointer[i]);
+            qemu_free(state->texCoordPointer[i]);
     }
     for (i = 0; i < MY_GL_MAX_VERTEX_ATTRIBS_ARB; i++) {
         if (state->vertexAttribPointer[i])
-            free(state->vertexAttribPointer[i]);
+            qemu_free(state->vertexAttribPointer[i]);
     }
     for (i = 0; i < MY_GL_MAX_VERTEX_ATTRIBS_NV; i++) {
         if (state->vertexAttribPointerNV[i])
-            free(state->vertexAttribPointerNV[i]);
+            qemu_free(state->vertexAttribPointerNV[i]);
     }
     if (state->weightPointer)
-        free(state->weightPointer);
+        qemu_free(state->weightPointer);
     if (state->matrixIndexPointer)
-        free(state->matrixIndexPointer);
+        qemu_free(state->matrixIndexPointer);
     if (state->fogCoordPointer)
-        free(state->fogCoordPointer);
+        qemu_free(state->fogCoordPointer);
     for (i = 0; i < MY_GL_MAX_VARIANT_POINTER_EXT; i++) {
         if (state->variantPointerEXT[i])
-            free(state->variantPointerEXT[i]);
+            qemu_free(state->variantPointerEXT[i]);
     }
     if (state->interleavedArrays)
-        free(state->interleavedArrays);
+        qemu_free(state->interleavedArrays);
     if (state->elementPointerATI)
-        free(state->elementPointerATI);
+        qemu_free(state->elementPointerATI);
 }
 
 static void init_gl_state(GLState *state)
@@ -903,9 +899,9 @@ void _create_context(ProcessState *process, GLXContext ctxt, int fake_ctxt,
                      GLXContext shareList, int fake_shareList)
 {
     process->glstates =
-        realloc(process->glstates,
+        qemu_realloc(process->glstates,
                 (process->nb_states + 1) * sizeof(GLState *));
-    process->glstates[process->nb_states] = malloc(sizeof(GLState));
+    process->glstates[process->nb_states] = qemu_malloc(sizeof(GLState));
     memset(process->glstates[process->nb_states], 0, sizeof(GLState));
     process->glstates[process->nb_states]->ref = 1;
     process->glstates[process->nb_states]->context = ctxt;
@@ -937,26 +933,16 @@ void _create_context(ProcessState *process, GLXContext ctxt, int fake_ctxt,
     process->nb_states++;
 }
 
-void do_disconnect(ProcessState *process)
+void disconnect(ProcessState *process)
 {
     int i;
     Display *dpy = process->dpy;
-
-    if(!process->p.wordsize)
-        fprintf(stderr, "Likely died prior to init: pid %d\n", process->p.process_id);
-    else 
-        fprintf("disconnect GL process: %d\n", process->p.process_id);
 
     glXMakeCurrent(dpy, 0, NULL);
 
     for (i = 0; i < MAX_ASSOC_SIZE &&
                     process->association_fakecontext_glxcontext[i].key; i ++) {
         GLXContext ctxt = process->association_fakecontext_glxcontext[i].value;
-
-        fprintf(stderr, "Destroy context corresponding to fake_context"
-                        " = %ld (%08x)\n", (long) process->
-                        association_fakecontext_glxcontext[i].key,
-			process->association_fakecontext_glxcontext[i].value);
         glXDestroyContext(dpy, ctxt);
     }
 
@@ -967,9 +953,6 @@ void do_disconnect(ProcessState *process)
         GLXPbuffer pbuffer = (GLXPbuffer)
                 process->association_fakepbuffer_pbuffer[i].value;
 
-        fprintf(stderr, "Destroy pbuffer corresponding to fake_pbuffer"
-                        " = %ld\n", (long) process->
-                        association_fakepbuffer_pbuffer[i].key);
         if (!is_gl_vendor_ati(dpy))
             ptr_func_glXDestroyPbuffer(dpy, pbuffer);
     }
@@ -978,10 +961,6 @@ void do_disconnect(ProcessState *process)
                     association_clientdrawable_serverdrawable[i].key; i ++) {
         Window win = (Window) process->
                 association_clientdrawable_serverdrawable[i].value;
-
-        fprintf(stderr, "Destroy window %x corresponding to client_drawable "
-                        "= %p\n", (int) win, process->
-                        association_clientdrawable_serverdrawable[i].key);
 
         XDestroyWindow(dpy, win);
 
@@ -1008,10 +987,10 @@ void do_disconnect(ProcessState *process)
 
     for (i = 0; i < process->nb_states; i++) {
         destroy_gl_state(process->glstates[i]);
-        free(process->glstates[i]);
+        qemu_free(process->glstates[i]);
     }
     destroy_gl_state(&process->default_state);
-    free(process->glstates);
+    qemu_free(process->glstates);
 
     if (process->cmdbuf)
         qemu_free(process->cmdbuf);
@@ -1027,7 +1006,7 @@ static const int beginend_allowed[GL_N_CALLS] = {
 #include "gl_beginend.h"
 };
 
-ProcessStruct *do_context_switch(pid_t pid, int switch_gl_context)
+ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
 {
     ProcessState *process = NULL;
     int i;
@@ -1042,7 +1021,6 @@ ProcessStruct *do_context_switch(pid_t pid, int switch_gl_context)
             process = &processes[i];
             break;
         } else if (processes[i].p.process_id == 0) {
-            fprintf(stderr, "new GL process: %d  dpy: %08x\n", pid, parent_dpy);
             process = &processes[i];
             memset(process, 0, sizeof(ProcessState));
             process->p.process_id = pid;
@@ -1074,16 +1052,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     Display *dpy = process->dpy;
     Signature *signature = (Signature *) tab_opengl_calls[func_number];
     int ret_type = signature->ret_type;
-    arg_t *tmp_args = args;
 
     ret.s = NULL;
 
     if (display_function_call) {
         fprintf(stderr, "[%d]> %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
-	while(*tmp_args) {
-		fprintf(stderr, " + %08x\n", *tmp_args++);
-        }
     }
 
     switch (func_number) {
@@ -1223,7 +1197,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             client_cursor.yhot = yhot;
             if (pixels) {
                 client_cursor.pixels =
-                    realloc(client_cursor.pixels,
+                    qemu_realloc(client_cursor.pixels,
                             client_cursor.width * client_cursor.height *
                             sizeof(int));
                 memcpy(client_cursor.pixels, pixels,
@@ -1317,7 +1291,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
                 vis->visualid = saved_visualid;
             }
-fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
             if (ctxt) {
                 int fake_ctxt = ++process->next_available_context_number;
@@ -1418,7 +1391,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                                     "destroy_gl_state fake_ctxt = %d\n",
                                     process->glstates[i]->fake_ctxt);
                             destroy_gl_state(process->glstates[i]);
-                            free(process->glstates[i]);
+                            qemu_free(process->glstates[i]);
                             memmove(&process->glstates[i],
                                     &process->glstates[i + 1],
                                     (process->nb_states - i - 1) *
@@ -1438,7 +1411,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                                                 fake_ctxt);
                                         destroy_gl_state(process->
                                                          glstates[i]);
-                                        free(process->glstates[i]);
+                                        qemu_free(process->glstates[i]);
                                         memmove(&process->glstates[i],
                                                 &process->glstates[i + 1],
                                                 (process->nb_states - i - 1) *
@@ -2104,7 +2077,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 ret.i = (vis) ? vis->visualid : 0;
                 if (vis) {
                     tabAssocAttribListVisual =
-                        realloc(tabAssocAttribListVisual,
+                        qemu_realloc(tabAssocAttribListVisual,
                                 sizeof(AssocAttribListVisual) *
                                 (nTabAssocAttribListVisual + 1));
                     tabAssocAttribListVisual[nTabAssocAttribListVisual].
@@ -2185,8 +2158,8 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             GET_EXT_PTR(void, glGenTextures, (GLsizei n, GLuint *textures));
             int i;
             int n = args[0];
-            unsigned int *clientTabTextures = malloc(n * sizeof(int));
-            unsigned int *serverTabTextures = malloc(n * sizeof(int));
+            unsigned int *clientTabTextures = qemu_malloc(n * sizeof(int));
+            unsigned int *serverTabTextures = qemu_malloc(n * sizeof(int));
 
             alloc_range(process->current_state->textureAllocator, n,
                         clientTabTextures);
@@ -2197,8 +2170,8 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                     serverTabTextures[i];
             }
 
-            free(clientTabTextures);
-            free(serverTabTextures);
+            qemu_free(clientTabTextures);
+            qemu_free(serverTabTextures);
             break;
         }
 
@@ -2214,7 +2187,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             delete_range(process->current_state->textureAllocator, n,
                          clientTabTextures);
 
-            unsigned int *serverTabTextures = malloc(n * sizeof(int));
+            unsigned int *serverTabTextures = qemu_malloc(n * sizeof(int));
 
             for (i = 0; i < n; i++) {
                 serverTabTextures[i] =
@@ -2224,7 +2197,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             for (i = 0; i < n; i++) {
                 process->current_state->tabTextures[clientTabTextures[i]] = 0;
             }
-            free(serverTabTextures);
+            qemu_free(serverTabTextures);
             break;
         }
 
@@ -2410,14 +2383,14 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             int n = args[0];
             int type = args[1];
             const GLvoid *lists = (const GLvoid *) args[2];
-            int *new_lists = malloc(sizeof(int) * n);
+            int *new_lists = qemu_malloc(sizeof(int) * n);
 
             for (i = 0; i < n; i++) {
                 new_lists[i] =
                     get_server_list(process, translate_id(i, type, lists));
             }
             glCallLists(n, GL_UNSIGNED_INT, new_lists);
-            free(new_lists);
+            qemu_free(new_lists);
             break;
         }
 
@@ -2446,8 +2419,8 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             GET_EXT_PTR(void, glGenBuffersARB, (int, unsigned int *));
             int i;
             int n = args[0];
-            unsigned int *clientTabBuffers = malloc(n * sizeof(int));
-            unsigned int *serverTabBuffers = malloc(n * sizeof(int));
+            unsigned int *clientTabBuffers = qemu_malloc(n * sizeof(int));
+            unsigned int *serverTabBuffers = qemu_malloc(n * sizeof(int));
 
             alloc_range(process->current_state->bufferAllocator, n,
                         clientTabBuffers);
@@ -2458,8 +2431,8 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                     serverTabBuffers[i];
             }
 
-            free(clientTabBuffers);
-            free(serverTabBuffers);
+            qemu_free(clientTabBuffers);
+            qemu_free(serverTabBuffers);
             break;
         }
 
@@ -2474,7 +2447,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             delete_range(process->current_state->bufferAllocator, n,
                          clientTabBuffers);
 
-            int *serverTabBuffers = malloc(n * sizeof(int));
+            int *serverTabBuffers = qemu_malloc(n * sizeof(int));
 
             for (i = 0; i < n; i++) {
                 serverTabBuffers[i] =
@@ -2484,7 +2457,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             for (i = 0; i < n; i++) {
                 process->current_state->tabBuffers[clientTabBuffers[i]] = 0;
             }
-            free(serverTabBuffers);
+            qemu_free(serverTabBuffers);
             break;
         }
 
@@ -2509,7 +2482,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             int size = args[1];
             int i;
             int acc_length = 0;
-            GLcharARB **tab_prog = malloc(size * sizeof(GLcharARB *));
+            GLcharARB **tab_prog = qemu_malloc(size * sizeof(GLcharARB *));
             int *tab_length = (int *) args[3];
 
             for (i = 0; i < size; i++) {
@@ -2518,7 +2491,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             }
             ptr_func_glShaderSourceARB(args[0], args[1], tab_prog,
                                        tab_length);
-            free(tab_prog);
+            qemu_free(tab_prog);
             break;
         }
 
@@ -2528,7 +2501,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             int size = args[1];
             int i;
             int acc_length = 0;
-            GLcharARB **tab_prog = malloc(size * sizeof(GLcharARB *));
+            GLcharARB **tab_prog = qemu_malloc(size * sizeof(GLcharARB *));
             int *tab_length = (int *) args[3];
 
             for (i = 0; i < size; i++) {
@@ -2536,7 +2509,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 acc_length += tab_length[i];
             }
             ptr_func_glShaderSource(args[0], args[1], tab_prog, tab_length);
-            free(tab_prog);
+            qemu_free(tab_prog);
             break;
         }
 
@@ -2552,7 +2525,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset,
                    (void *) args[5], bytes_size);
@@ -2574,7 +2547,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->normalPointerSize,
                     offset + bytes_size);
             process->current_state->normalPointer =
-                realloc(process->current_state->normalPointer,
+                qemu_realloc(process->current_state->normalPointer,
                         process->current_state->normalPointerSize);
             memcpy(process->current_state->normalPointer + offset,
                    (void *) args[4], bytes_size);
@@ -2596,7 +2569,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->indexPointerSize,
                     offset + bytes_size);
             process->current_state->indexPointer =
-                realloc(process->current_state->indexPointer,
+                qemu_realloc(process->current_state->indexPointer,
                         process->current_state->indexPointerSize);
             memcpy(process->current_state->indexPointer + offset,
                    (void *) args[4], bytes_size);
@@ -2617,7 +2590,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->edgeFlagPointerSize,
                     offset + bytes_size);
             process->current_state->edgeFlagPointer =
-                realloc(process->current_state->edgeFlagPointer,
+                qemu_realloc(process->current_state->edgeFlagPointer,
                         process->current_state->edgeFlagPointerSize);
             memcpy(process->current_state->edgeFlagPointer + offset,
                    (void *) args[3], bytes_size);
@@ -2644,7 +2617,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexAttribPointerSize[index],
                     offset + bytes_size);
             process->current_state->vertexAttribPointer[index] =
-                realloc(process->current_state->vertexAttribPointer[index],
+                qemu_realloc(process->current_state->vertexAttribPointer[index],
                         process->current_state->
                         vertexAttribPointerSize[index]);
             memcpy(process->current_state->vertexAttribPointer[index] +
@@ -2671,7 +2644,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexAttribPointerNVSize[index],
                     offset + bytes_size);
             process->current_state->vertexAttribPointerNV[index] =
-                realloc(process->current_state->vertexAttribPointerNV[index],
+                qemu_realloc(process->current_state->vertexAttribPointerNV[index],
                         process->current_state->
                         vertexAttribPointerNVSize[index]);
             memcpy(process->current_state->vertexAttribPointerNV[index] +
@@ -2694,7 +2667,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->colorPointerSize,
                     offset + bytes_size);
             process->current_state->colorPointer =
-                realloc(process->current_state->colorPointer,
+                qemu_realloc(process->current_state->colorPointer,
                         process->current_state->colorPointerSize);
             memcpy(process->current_state->colorPointer + offset,
                    (void *) args[5], bytes_size);
@@ -2720,7 +2693,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->secondaryColorPointerSize,
                     offset + bytes_size);
             process->current_state->secondaryColorPointer =
-                realloc(process->current_state->secondaryColorPointer,
+                qemu_realloc(process->current_state->secondaryColorPointer,
                         process->current_state->secondaryColorPointerSize);
             memcpy(process->current_state->secondaryColorPointer + offset,
                    (void *) args[5], bytes_size);
@@ -2798,7 +2771,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->texCoordPointerSize[index],
                     offset + bytes_size);
             process->current_state->texCoordPointer[index] =
-                realloc(process->current_state->texCoordPointer[index],
+                qemu_realloc(process->current_state->texCoordPointer[index],
                         process->current_state->texCoordPointerSize[index]);
             memcpy(process->current_state->texCoordPointer[index] + offset,
                    (void *) args[6], bytes_size);
@@ -2826,7 +2799,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->weightPointerSize,
                     offset + bytes_size);
             process->current_state->weightPointer =
-                realloc(process->current_state->weightPointer,
+                qemu_realloc(process->current_state->weightPointer,
                         process->current_state->weightPointerSize);
             memcpy(process->current_state->weightPointer + offset,
                    (void *) args[5], bytes_size);
@@ -2853,7 +2826,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->matrixIndexPointerSize,
                     offset + bytes_size);
             process->current_state->matrixIndexPointer =
-                realloc(process->current_state->matrixIndexPointer,
+                qemu_realloc(process->current_state->matrixIndexPointer,
                         process->current_state->matrixIndexPointerSize);
             memcpy(process->current_state->matrixIndexPointer + offset,
                    (void *) args[5], bytes_size);
@@ -2878,7 +2851,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->fogCoordPointerSize,
                     offset + bytes_size);
             process->current_state->fogCoordPointer =
-                realloc(process->current_state->fogCoordPointer,
+                qemu_realloc(process->current_state->fogCoordPointer,
                         process->current_state->fogCoordPointerSize);
             memcpy(process->current_state->fogCoordPointer + offset,
                    (void *) args[4], bytes_size);
@@ -2903,7 +2876,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->variantPointerEXTSize[id],
                     offset + bytes_size);
             process->current_state->variantPointerEXT[id] =
-                realloc(process->current_state->variantPointerEXT[id],
+                qemu_realloc(process->current_state->variantPointerEXT[id],
                         process->current_state->variantPointerEXTSize[id]);
             memcpy(process->current_state->variantPointerEXT[id] + offset,
                    (void *) args[5], bytes_size);
@@ -2927,7 +2900,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->interleavedArraysSize,
                     offset + bytes_size);
             process->current_state->interleavedArrays =
-                realloc(process->current_state->interleavedArrays,
+                qemu_realloc(process->current_state->interleavedArrays,
                         process->current_state->interleavedArraysSize);
             memcpy(process->current_state->interleavedArrays + offset,
                    (void *) args[4], bytes_size);
@@ -2947,7 +2920,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
             process->current_state->elementPointerATISize = bytes_size;
             process->current_state->elementPointerATI =
-                realloc(process->current_state->elementPointerATI,
+                qemu_realloc(process->current_state->elementPointerATI,
                         process->current_state->elementPointerATISize);
             memcpy(process->current_state->elementPointerATI,
                    (void *) args[2], bytes_size);
@@ -2968,7 +2941,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
             process->current_state->texCoordPointerSize[0] = bytes_size;
             process->current_state->texCoordPointer[0] =
-                realloc(process->current_state->texCoordPointer[0],
+                qemu_realloc(process->current_state->texCoordPointer[0],
                         bytes_size);
             memcpy(process->current_state->texCoordPointer[0],
                    (void *) args[4], bytes_size);
@@ -2996,7 +2969,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
             process->current_state->texCoordPointerSize[0] = bytes_size;
             process->current_state->texCoordPointer[0] =
-                realloc(process->current_state->texCoordPointer[0],
+                qemu_realloc(process->current_state->texCoordPointer[0],
                         bytes_size);
             memcpy(process->current_state->texCoordPointer[0],
                    (void *) args[4], bytes_size);
@@ -3030,7 +3003,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
             process->current_state->vertexPointerSize = bytes_size;
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer, bytes_size);
+                qemu_realloc(process->current_state->vertexPointer, bytes_size);
             memcpy(process->current_state->vertexPointer, ptr, bytes_size);
             glVertexPointer(vertexPointerSize, vertexPointerType,
                             vertexPointerStride,
@@ -3056,7 +3029,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset, ptr,
                    bytes_size);
@@ -3105,7 +3078,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset, ptr,
                    bytes_size);
@@ -3140,7 +3113,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset, ptr,
                    bytes_size);
@@ -3179,7 +3152,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset, ptr,
                    bytes_size);
@@ -3221,7 +3194,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset, ptr,
                    bytes_size);
@@ -3271,7 +3244,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset, ptr,
                    bytes_size);
@@ -3323,7 +3296,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset, ptr,
                    bytes_size);
@@ -3371,7 +3344,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset, ptr,
                    bytes_size);
@@ -3427,7 +3400,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                 MAX(process->current_state->vertexPointerSize,
                     offset + bytes_size);
             process->current_state->vertexPointer =
-                realloc(process->current_state->vertexPointer,
+                qemu_realloc(process->current_state->vertexPointer,
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset, ptr,
                    bytes_size);
@@ -3643,7 +3616,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
         {
             process->current_state->selectBufferSize = args[0] * 4;
             process->current_state->selectBufferPtr =
-                realloc(process->current_state->selectBufferPtr,
+                qemu_realloc(process->current_state->selectBufferPtr,
                         process->current_state->selectBufferSize);
             glSelectBuffer(args[0], process->current_state->selectBufferPtr);
             break;
@@ -3662,7 +3635,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
         {
             process->current_state->feedbackBufferSize = args[0] * 4;
             process->current_state->feedbackBufferPtr =
-                realloc(process->current_state->feedbackBufferPtr,
+                qemu_realloc(process->current_state->feedbackBufferPtr,
                         process->current_state->feedbackBufferSize);
             glFeedbackBuffer(args[0], args[1],
                              process->current_state->feedbackBufferPtr);

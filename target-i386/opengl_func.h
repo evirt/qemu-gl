@@ -20,8 +20,15 @@
  * THE SOFTWARE.
  */
 
+#ifndef INCLUDE_OPENGL_FUNC_H
+#define INCLUDE_OPENGL_FUNC_H
+
 #include "mesa_gl.h"
 #include "mesa_glext.h"
+
+#define NEED_CPU_H
+#include "exec.h"  // For arg_t typedef
+#undef NEED_CPU_H
 
 /* Argument list are internally of a type that can hold a target pointer
  * or a host pointer.  */
@@ -1092,4 +1099,6 @@ static inline int compute_arg_length(FILE *err_file, int func_number,
                   func_number == glTexImage3D_func || \
                   func_number == glBufferDataARB_func || \
                   func_number == glNewObjectBufferATI_func)
+
+#endif // INCLUDE_OPENGL_FUNC_H
 

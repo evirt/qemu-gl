@@ -119,7 +119,6 @@ VirtIODevice *virtio_gl_init(DeviceState *dev)
                                             VIRTIO_ID_GL,
                                             0, sizeof(VirtIOGL));
 
-	fprintf(stderr, "Init GL dev\n");
     if (!s)
         return NULL;
 
