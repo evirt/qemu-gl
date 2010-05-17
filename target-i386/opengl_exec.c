@@ -39,6 +39,7 @@
 #include "opengl_func.h"
 #include "mesa_mipmap.h"
 #include "opengl_process.h"
+#include "opengl_utils.h"
 
 void *qemu_malloc(size_t size);
 void *qemu_realloc(void *ptr, size_t size);
@@ -142,55 +143,167 @@ void opengl_exec_set_parent_window(Display *_dpy, Window _parent_window)
     qemu_parent_window = _parent_window;
 }
 
-static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
+
+/* -----------------HUGE HUGE HACK ------------------------ */
+
+#define WINX (350)
+#define WINY (350)
+#define WINDEPTH (24)
+
+int singleBufferAttributess[] = {
+    GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
+    GLX_RENDER_TYPE,   GLX_RGBA_BIT,
+    GLX_RED_SIZE,      8,
+    GLX_GREEN_SIZE,    8,
+    GLX_BLUE_SIZE,     8,
+    GLX_ALPHA_SIZE,    8,
+    GLX_DEPTH_SIZE,   16,
+    None
+};
+
+    #include <X11/extensions/XShm.h>
+    #include <sys/ipc.h>
+    #include <sys/shm.h>
+
+
+#if 0
+GLXContext            stupidcontext;
+//static Pixmap dumb_pixmap;
+static Display              *shit_dpy;
+#endif
+
+//static Window super_cow_win;
+//static XImage *dumb_image;
+//static XShmSegmentInfo shminfo;
+
+void blit_drawable_to_guest(Display *dpy, GLXDrawable drawable, int w, int h, char *buffer)
 {
-    int x=0, y=0, width=16, height=16;
-    int scrnum;
-    XSetWindowAttributes attr = { 0 };
-    unsigned long mask;
-    Window win;
+    int irow;
+//    fprintf(stderr, "give_update to: %08x\n", drawable);
+//    fprintf(stderr, "dim %d x %d\n", w, h);
+//    fprintf(stderr, "buf %08x\n", buffer);
 
-    scrnum = DefaultScreen(dpy);
-
-    /* window attributes */
-    attr.background_pixel = 0xff000000;
-    attr.border_pixel = 0;
-    attr.colormap = XCreateColormap(dpy, qemu_parent_window, vis->visual, AllocNone);
-    attr.event_mask = 0; /* StructureNotifyMask | ExposureMask | KeyPressMask */
-    attr.save_under = True;
-    attr.override_redirect = True;
-    attr.cursor = None;
-    mask =
-        CWBackPixel | CWBorderPixel | CWColormap | CWEventMask |
-        CWOverrideRedirect | CWSaveUnder;
-
-    if (qemu_parent_window)
-        win = XCreateWindow(dpy, qemu_parent_window, 0, 0, width, height, 0,
-                        vis->depth, InputOutput, vis->visual, mask, &attr);
-
-    /* set hints and properties */
-    {
-        XSizeHints sizehints;
-
-        sizehints.x = x;
-        sizehints.y = y;
-        sizehints.width = width;
-        sizehints.height = height;
-        sizehints.flags = USSize | USPosition;
-        XSetWMNormalHints(dpy, win, &sizehints);
-        XSetStandardProperties(dpy, win, "", "", None,
-                        (char **) NULL, 0, &sizehints);
+    // if resizd, reallocate. else...
+    if(!buffer) {
+        fprintf(stderr, "resize!\n");
+        return;
     }
 
-    XSync(dpy, 0);
+//{
+//int i, t = 0;
+//for(i = 0 ; i < w*h*4 ; i++)
+//  t += (unsigned char *)buffer[i];
+//fprintf(stderr, "t! %d\n", t);
+//}
+if(w > 300)
+  w = 300;
+if(h > 300)
+  h = 300;
+    for(irow = h-1 ; irow >= 0 ; irow--) {
+        glReadPixels(0, irow, w, 1, GL_BGR, GL_UNSIGNED_BYTE, buffer);
+        buffer += 3*w;
+    }
 
-    /* 
-     * int loop = 1; while (loop) { while (XPending(dpy) > 0) { XEvent event;
-     * XNextEvent(dpy, &event); switch (event.type) { case CreateNotify: { if
-     * (((XCreateWindowEvent*)&event)->window == win) { loop = 0; } break; } }
-     * } } */
+}
 
-    return win;
+#if 0
+static void local_render(Display *dpy, int w, int h) {
+static int first;
+static char *buf;
+char *b;
+int irow;
+
+if(0/*!first*/) {
+    (&shminfo)->shmid=shmget(IPC_PRIVATE, WINX*WINY*4,IPC_CREAT|0777);
+    buf = dumb_image->data = (&shminfo)->shmaddr = shmat((&shminfo)->shmid,NULL,0);
+    (&shminfo)->readOnly=False;
+    XShmAttach(dpy,&shminfo);
+    XSync(dpy, False );
+    first = 1;
+}
+
+if(!first) {
+    buf = dumb_image->data = malloc(WINX*WINY*4);
+    XSync(dpy, False );
+    first = 1;
+}
+
+
+    b = buf;
+    for(irow = h-1 ; irow >= 0 ; irow--) {
+        glReadPixels(0, irow, w, 1, GL_BGRA, GL_UNSIGNED_BYTE, b);
+        b += 4*w;
+    }
+
+
+    {
+         unsigned long black, white;
+         black = BlackPixel(dpy, DefaultScreen(dpy));
+         white = WhitePixel(dpy, DefaultScreen(dpy));
+         XSetBackground(dpy, DefaultGC(dpy, 0), black);
+         XSetForeground(dpy, DefaultGC(dpy, 0), white);
+
+         XDrawLine(dpy, super_cow_win, DefaultGC(dpy, 0), 0, 0, 200, 200);
+         XFillRectangle(dpy, super_cow_win, DefaultGC(dpy, 0), 20, 20, 10, 10);
+//         XShmPutImage(dpy, super_cow_win, DefaultGC(dpy, 0), dumb_image,
+//                      0, 0, 20, 20, w, h, False);
+         XPutImage(dpy, super_cow_win, DefaultGC(dpy, 0), dumb_image, 0, 0, 20, 20, w, h);
+         XFlush(dpy);
+    }
+
+}
+#endif
+
+static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
+{
+//    int x=0, y=0, width=16, height=16;
+//    int scrnum;
+//    XSetWindowAttributes attr = { 0 };
+//    unsigned long mask;
+
+    Pixmap                xPixmap;
+    GLXFBConfig          *fbConfigs;
+    GLXPixmap             glxPixmap;
+    int                   numReturned;
+
+    fbConfigs = glXChooseFBConfig( dpy, DefaultScreen(dpy),
+                                   singleBufferAttributess, &numReturned );
+
+    if (numReturned==0) {
+        fprintf(stderr, "No matching configs found.\n" );
+        exit(-1);
+    }
+
+    xPixmap = XCreatePixmap(dpy, DefaultRootWindow(dpy), 300, 300, 24); // FIXMEIM Need to find a way to free this
+    glxPixmap = glXCreatePixmap( dpy, fbConfigs[0], xPixmap, NULL); // FIXMEIM we really should try harder to match the guests visual...
+
+#if 0
+{
+     XSetWindowAttributes attr = { 0 };
+     unsigned long mask;
+/* window attributes */
+     attr.background_pixel = 0xff000000;
+     attr.border_pixel = 0;
+     attr.colormap = XCreateColormap(dpy, DefaultRootWindow(dpy), DefaultVisual(dpy, 0) /*vis->visual*/, AllocNone);
+     attr.event_mask = 0; /* StructureNotifyMask | ExposureMask | KeyPressMask */
+     attr.save_under = True;
+     attr.cursor = None;
+     mask =
+         CWBackPixel | CWBorderPixel | CWColormap | CWEventMask | CWSaveUnder;
+ 
+     super_cow_win = XCreateWindow(dpy, DefaultRootWindow(dpy), 0, 0, WINX, WINY, 0,
+                         24/*vis->depth*/, InputOutput, DefaultVisual(dpy, 0) /*vis->visual*/, mask, &attr);
+ 
+    XSelectInput(dpy, super_cow_win, ExposureMask);
+    XMapWindow(dpy, super_cow_win);
+    XFlush(dpy);
+//    dumb_image = XShmCreateImage(dpy, DefaultVisual(dpy, 0) /*vis->visual*/, 24, ZPixmap, NULL, &shminfo, WINX, WINY);
+    dumb_image = XCreateImage(dpy, DefaultVisual(dpy, 0) /*vis->visual*/, 24, ZPixmap, 0, NULL, WINX, WINY, BitmapPad(dpy), 0);
+    XFlush(dpy);
+}
+#endif
+
+    return glxPixmap;
 }
 
 typedef struct {
@@ -202,8 +315,6 @@ typedef struct {
 #define MAX_ASSOC_SIZE 100
 
 #define MAX_FBCONFIG 10
-
-#include "opengl_utils.h"
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
@@ -229,6 +340,7 @@ typedef struct {
     int fake_shareList;
     GLXContext context;
     GLXDrawable drawable;
+    GLXPixmap pixmap;
 
     void *vertexPointer;
     void *normalPointer;
@@ -556,6 +668,7 @@ void set_association_clientdrawable_serverdrawable(
 
 static void _get_window_pos(Display *dpy, Window win, WindowPosStruct *pos)
 {
+    return;
     XWindowAttributes window_attributes_return;
     Window child;
     int x, y;
@@ -652,7 +765,7 @@ static int _compute_length_of_attrib_list_including_zero(const int *attribList,
                                                          int
                                                          booleanMustHaveValue)
 {
-    int i = 0;
+    int i = 0, s = 0;
 
     while (attribList[i]) {
         if (booleanMustHaveValue ||
@@ -663,8 +776,12 @@ static int _compute_length_of_attrib_list_including_zero(const int *attribList,
         } else {
             i++;
         }
+        //FIXMEIM hack
+        if(attribList[i] == GLX_DOUBLEBUFFER) {
+            s += 1;
+        }
     }
-    return i + 1;
+    return i + 1 - s;
 }
 
 static int glXChooseVisualFunc(Display *dpy, const int *_attribList)
@@ -673,10 +790,23 @@ static int glXChooseVisualFunc(Display *dpy, const int *_attribList)
         return 0;
     int attribListLength =
         _compute_length_of_attrib_list_including_zero(_attribList, 0);
-    int i;
+    int i, j;
 
     int *attribList = qemu_malloc(sizeof(int) * attribListLength);
-    memcpy(attribList, _attribList, sizeof(int) * attribListLength);
+//    memcpy(attribList, _attribList, sizeof(int) * attribListLength);
+    //FIXMEIM hack
+    i = j = 0;
+    while (_attribList[i]) {
+        if(_attribList[i] != GLX_DOUBLEBUFFER) {
+	    attribList[j] = _attribList[i];
+                j++;
+        }
+        i++;
+    }
+    attribList[j] = 0;
+
+    if(i != j)
+       fprintf(stderr, "choose visual - dropping double-buffer\n");
 
     i = 0;
     while (attribList[i]) {
@@ -962,10 +1092,10 @@ void disconnect(ProcessState *process)
         Window win = (Window) process->
                 association_clientdrawable_serverdrawable[i].value;
 
-        XDestroyWindow(dpy, win);
+//        XDestroyWindow(dpy, win);
 
 //FIXMEIM - wtf is this for?
-        int loop = 1;
+        int loop = 0;
         while (loop) {
             while (XPending(dpy) > 0) {
                 XEvent event;
@@ -1070,6 +1200,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case _changeWindowState_func:
         {
+        break;
+#if 0
             ClientGLXDrawable client_drawable = to_drawable(args[0]);
 
             if (display_function_call)
@@ -1112,6 +1244,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
 
             break;
+#endif
         }
 
     case _moveResizeWindow_func:
@@ -1126,6 +1259,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             GLXDrawable drawable =
                     get_association_clientdrawable_serverdrawable(
                                     process, client_drawable);
+
+//            local_render(dpy, params[0], params[1]);
+            blit_drawable_to_guest(dpy, drawable, params[0], params[1],
+                                   (char*)args[2]);
+            break;
+
             if (drawable) {
                 WindowPosStruct pos;
 
@@ -1143,6 +1282,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                     XMoveResizeWindow(dpy, drawable, params[0], params[1],
                                       params[2], params[3]);
 
+                    XSync(dpy, 0);
 #if 0
                     int loop = 0;       // = 1
 
@@ -1281,6 +1421,24 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             XVisualInfo *vis = get_visual_info_from_visual_id(dpy, visualid);
             GLXContext ctxt;
 
+    {
+       GLXFBConfig          *fbConfigs;
+       int                   numReturned;
+
+       fbConfigs = glXChooseFBConfig( dpy, DefaultScreen(dpy),
+                                   singleBufferAttributess, &numReturned );
+
+       if (numReturned==0) {
+           printf( "No matching configs found.\n" );
+           exit( EXIT_FAILURE );
+       }
+
+       /* Create a GLX context for OpenGL rendering */
+       ctxt = glXCreateNewContext( dpy, fbConfigs[0], GLX_RGBA_TYPE,
+                                      NULL, True );
+    }
+
+#if 0
             if (vis) {
                 ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
             } else {
@@ -1291,6 +1449,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
                 vis->visualid = saved_visualid;
             }
+#endif
 
             if (ctxt) {
                 int fake_ctxt = ++process->next_available_context_number;
@@ -1467,20 +1626,23 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 if(!ctxt) {
                     fprintf(stderr, "invalid fake_ctxt (%d)!\n", fake_ctxt);
                 } else {
+                     //FIXMEIM - the order of lookup seems wrong here. might be faster to lookup in a different order.
                     /* If the host drawable is a pbuffer, lookup the associated
                        context */
                     host_drawable = (GLXDrawable)
                                         get_association_fakepbuffer_pbuffer(
                                                 process, client_drawable);
                     if(!host_drawable) {
-                        /* Else, create an ordinary drawable */
+                        /* else try to lookup ordinary drawable */
                         host_drawable = get_association_clientdrawable_serverdrawable(
                                         process, client_drawable);
-                        if (host_drawable == 0) {
+                        if (!host_drawable) {
+                            /* else, create an ordinary drawable */
                             XVisualInfo *vis = get_association_fakecontext_visual(
                                             process, fake_ctxt);
-                            if (vis == NULL)
+                            if (!vis)
                                 vis = get_default_visual(dpy);
+
                             host_drawable = create_window(dpy, vis);
     
                             fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)host_drawable, (unsigned long int)client_drawable);
@@ -1489,30 +1651,32 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                             client_drawable, host_drawable);
                         }
                     }
-                }
-            }
 
-            if(fake_ctxt) {
-                for (i = 0; i < process->nb_states; i ++) {
-                    if (process->glstates[i]->fake_ctxt == fake_ctxt) {
-                        process->current_state = process->glstates[i];
-                        process->current_state->drawable = host_drawable;
-                        break;
+                    /* By here, we have a context and a drawable */
+                    /* Try to store the state. */
+                    for (i = 0; i < process->nb_states; i ++) {
+                        if (process->glstates[i]->fake_ctxt == fake_ctxt) {
+                            process->current_state = process->glstates[i];
+                            process->current_state->drawable = host_drawable;
+                            break;
+                        }
                     }
-                }
 
-                if (i == process->nb_states) {
-                    fprintf(stderr, "error remembering the new context\n");
-                    exit(-1);
+                    if (i == process->nb_states) {
+                        fprintf(stderr, "error remembering the new context\n");
+                        exit(-1);
+                    }
+
+
+                    ret.i = glXMakeCurrent(dpy, host_drawable, ctxt);
                 }
             }
-
-            ret.i = glXMakeCurrent(dpy, host_drawable, ctxt);
             break;
         }
 
     case glXSwapBuffers_func:
         {
+            break;
             ClientGLXDrawable client_drawable = to_drawable(args[1]);
 
             if (display_function_call)
@@ -1525,68 +1689,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 fprintf(stderr, "unknown client_drawable (%p) !\n",
                         (void *) client_drawable);
             } else {
-#ifdef CURSOR_TRICK
-                if (client_cursor.pixels && local_connection == 0) {
-                    glPushAttrib(GL_ALL_ATTRIB_BITS);
-                    glPushClientAttrib(GL_ALL_ATTRIB_BITS);
-
-                    glMatrixMode(GL_PROJECTION);
-                    glPushMatrix();
-                    glLoadIdentity();
-                    glOrtho(0, process->currentDrawablePos.width,
-                            process->currentDrawablePos.height, 0, -1, 1);
-                    glMatrixMode(GL_MODELVIEW);
-                    glPushMatrix();
-                    glLoadIdentity();
-                    glPixelZoom(1, -1);
-
-                    glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
-                    glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
-                    glPixelStorei(GL_UNPACK_SWAP_BYTES, 0);
-                    glPixelStorei(GL_UNPACK_LSB_FIRST, 0);
-                    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-                    glShadeModel(GL_SMOOTH);
-
-                    glEnable(GL_BLEND);
-                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
-                    int i, numUnits;
-
-                    glGetIntegerv(GL_MAX_TEXTURE_UNITS_ARB, &numUnits);
-                    for (i = 0; i < numUnits; i++) {
-                        do_glActiveTextureARB(GL_TEXTURE0_ARB + i);
-                        glDisable(GL_TEXTURE_1D);
-                        glDisable(GL_TEXTURE_2D);
-                        glDisable(GL_TEXTURE_3D);
-                    }
-                    glDisable(GL_ALPHA_TEST);
-                    glDisable(GL_DEPTH_TEST);
-                    glDisable(GL_STENCIL_TEST);
-                    glDisable(GL_SCISSOR_TEST);
-                    glDisable(GL_FRAGMENT_PROGRAM_ARB);
-                    glDisable(GL_VERTEX_PROGRAM_ARB);
-                    do_glUseProgramObjectARB(0);
-
-                    // memset(client_cursor.pixels, 255, client_cursor.width
-                    // * client_cursor.height * sizeof(int));
-
-                    glRasterPos2d(client_cursor.x - client_cursor.xhot,
-                                  client_cursor.y - client_cursor.yhot);
-                    glDrawPixels(client_cursor.width, client_cursor.height,
-                                 GL_BGRA, GL_UNSIGNED_BYTE,
-                                 client_cursor.pixels);
-
-                    glMatrixMode(GL_MODELVIEW);
-                    glPopMatrix();
-
-                    glMatrixMode(GL_PROJECTION);
-                    glPopMatrix();
-
-                    glPopClientAttrib();
-                    glPopAttrib();
-                }
-#endif
 
                 glXSwapBuffers(dpy, drawable);
             }
@@ -1665,6 +1767,14 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 *(int *) args[3] = 0;
                 ret.i = 0;
             } else {
+                int *attrib_list = (int *) args[2];
+		while(*attrib_list != None) {
+			if(*attrib_list == GLX_DOUBLEBUFFER) {
+				fprintf(stderr, "Squashing doublebuffered visual");
+				*(attrib_list+1) = False;
+				attrib_list += 2;
+			}
+		}
                 GLXFBConfig *fbconfigs =
                     ptr_func_glXChooseFBConfig(dpy, args[1], (int *) args[2],
                                                (int *) args[3]);
