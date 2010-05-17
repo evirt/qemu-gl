@@ -306,7 +306,7 @@ static const int _changeWindowState_signature[] =
     { TYPE_NONE, 0, 2, TYPE_INT, TYPE_INT };
 
 static const int _moveResizeWindow_signature[] =
-    { TYPE_NONE, 0, 2, TYPE_INT, TYPE_4INT };
+    { TYPE_NONE, 0, 3, TYPE_INT, TYPE_3INT, TYPE_OUT_ARRAY_CHAR};
 
 static const int _send_cursor_signature[] =
     { TYPE_NONE, 0, 7, TYPE_INT, TYPE_INT,
