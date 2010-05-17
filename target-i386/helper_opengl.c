@@ -60,112 +60,113 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
     argptr = args_in;
 
     while((char*)argptr < (char*)args_in + args_len) {
-    func_number = *(short*)argptr;
-    argptr += 2;
+        func_number = *(short*)argptr;
+        argptr += 2;
 
-    signature = (Signature *) tab_opengl_calls[func_number];
+        signature = (Signature *) tab_opengl_calls[func_number];
 
-    tmp = argptr;
+        tmp = argptr;
 
-    for (i = 0; i < signature->nb_args; i++) {
-        int args_size = *(int*)argptr;
-	argptr+=4;
-        switch (signature->args_type[i]) {
-        case TYPE_UNSIGNED_INT:
-        case TYPE_INT:
-        case TYPE_UNSIGNED_CHAR:
-        case TYPE_CHAR:
-        case TYPE_UNSIGNED_SHORT:
-        case TYPE_SHORT:
-        case TYPE_FLOAT:
-	    args[i] = *(int*)argptr;
-            break;
-
-        case TYPE_NULL_TERMINATED_STRING:
-        CASE_IN_UNKNOWN_SIZE_POINTERS:
-            {
-                if(*(int*)argptr)
-                    args[i] = (arg_t)argptr+4;
-                else
-                    args[i] = (arg_t)NULL;
-
-                if ((args[i] == 0 && args_size == 0 &&
-                    !IS_NULL_POINTER_OK_FOR_FUNC(func_number)) ||
-                    (args[i] == 0 && args_size != 0) ||
-                    (args[i] != 0 && args_size == 0))
-                        return 0;
-
-                argptr += 4;
+        for (i = 0; i < signature->nb_args; i++) {
+            int args_size = *(int*)argptr;
+            argptr+=4;
+            switch (signature->args_type[i]) {
+                case TYPE_UNSIGNED_INT:
+                case TYPE_INT:
+                case TYPE_UNSIGNED_CHAR:
+                case TYPE_CHAR:
+                case TYPE_UNSIGNED_SHORT:
+                case TYPE_SHORT:
+                case TYPE_FLOAT:
+        	    args[i] = *(int*)argptr;
                 break;
-            }
 
-        CASE_IN_LENGTH_DEPENDING_ON_PREVIOUS_ARGS:
+                case TYPE_NULL_TERMINATED_STRING:
+                CASE_IN_UNKNOWN_SIZE_POINTERS:
+                {
+                    if(*(int*)argptr)
+                        args[i] = (arg_t)argptr+4;
+                    else
+                        args[i] = (arg_t)NULL;
+
+                    if ((args[i] == 0 && args_size == 0 &&
+                        !IS_NULL_POINTER_OK_FOR_FUNC(func_number)) ||
+                        (args[i] == 0 && args_size != 0) ||
+                        (args[i] != 0 && args_size == 0))
+                            return 0;
+
+                    argptr += 4;
+                    break;
+                }
+
+                CASE_IN_LENGTH_DEPENDING_ON_PREVIOUS_ARGS:
 // FIXMEIM - for security, we should really validate this...
 //                    compute_arg_length(stderr, func_number, i, args);
-            {
-                if(*(int*)argptr)
-                    args[i] = (arg_t)argptr+4;
-                else
-                    args[i] = (arg_t)NULL;
+                {
+                    if(*(int*)argptr)
+                        args[i] = (arg_t)argptr+4;
+                    else
+                        args[i] = (arg_t)NULL;
 
-                if (args[i] == 0 && args_size != 0)
-                    return 0;
+                    if (args[i] == 0 && args_size != 0)
+                        return 0;
 
-                argptr += 4;
-                break;
-            }
-
-        CASE_OUT_POINTERS:
-            {
-                /* It seems that we never experience NULL out pointers!!! */
-                if (args_size == 0)
-                    return 0;
-
-                if(*(int*)argptr) {
-                    *(int*)r_buffer = args_size;
-                    r_buffer+=4;
-                    args[i] = (arg_t)r_buffer;
-                    r_buffer += args_size;
-                }
-                else {
-                    return 0;
+                    argptr += 4;
+                    break;
                 }
 
-                argptr += 4;
-                break;
-            } 
+                CASE_OUT_POINTERS:
+                {
+                    /* It seems that we never experience NULL out pointers!!! */
+                    if (args_size == 0)
+                        return 0;
 
-        case TYPE_DOUBLE:
-        CASE_IN_KNOWN_SIZE_POINTERS:
-            {
-                if(*(int*)argptr)
-                    args[i] = (arg_t)argptr+4;
-                else
-                    args[i] = (arg_t)NULL;
+                    if(*(int*)argptr) {
+                        *(int*)r_buffer = args_size;
+                        r_buffer+=4;
+                        args[i] = (arg_t)r_buffer;
+                        r_buffer += args_size;
+                    }
+                    else {
+                        return 0;
+                    }
 
-                if (args[i] == 0 && args_size != 0)
+                    argptr += 4;
+                    break;
+                } 
+
+                case TYPE_DOUBLE:
+                CASE_IN_KNOWN_SIZE_POINTERS:
+                {
+                    if(*(int*)argptr)
+                        args[i] = (arg_t)argptr+4;
+                    else
+                        args[i] = (arg_t)NULL;
+
+                    if (args[i] == 0 && args_size != 0)
+                        return 0;
+
+                    argptr += 4;
+                    break;
+                }
+
+                case TYPE_IN_IGNORED_POINTER:
+                    args[i] = 0;
+                    break;
+
+                default:
+                    fprintf(stderr, "Oops : call %s arg %d pid=%d\n",
+                            tab_opengl_calls_name[func_number], i,
+                            process->process_id);
                     return 0;
-
-                argptr += 4;
-                break;
             }
-
-        case TYPE_IN_IGNORED_POINTER:
-            args[i] = 0;
-            break;
-
-        default:
-            fprintf(stderr, "shouldn't happen : call %s arg %d pid=%d\n",
-                    tab_opengl_calls_name[func_number], i, process->process_id);
-            return 0;
+            argptr += args_size;
         }
-	argptr += args_size;
-    }
 
-    if (signature->ret_type == TYPE_CONST_CHAR)
-        r_buffer[0] = 0;
+        if (signature->ret_type == TYPE_CONST_CHAR)
+            r_buffer[0] = 0;
 
-    ret = do_function_call(process, func_number, args, r_buffer);
+        ret = do_function_call(process, func_number, args, r_buffer);
 
     }  // endwhile
 
