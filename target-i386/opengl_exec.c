@@ -176,36 +176,6 @@ static Display              *shit_dpy;
 //static XImage *dumb_image;
 //static XShmSegmentInfo shminfo;
 
-void blit_drawable_to_guest(Display *dpy, GLXDrawable drawable, int w, int h, char *buffer)
-{
-    int irow;
-//    fprintf(stderr, "give_update to: %08x\n", drawable);
-//    fprintf(stderr, "dim %d x %d\n", w, h);
-//    fprintf(stderr, "buf %08x\n", buffer);
-
-    // if resizd, reallocate. else...
-    if(!buffer) {
-        fprintf(stderr, "resize!\n");
-        return;
-    }
-
-//{
-//int i, t = 0;
-//for(i = 0 ; i < w*h*4 ; i++)
-//  t += (unsigned char *)buffer[i];
-//fprintf(stderr, "t! %d\n", t);
-//}
-if(w > 300)
-  w = 300;
-if(h > 300)
-  h = 300;
-    for(irow = h-1 ; irow >= 0 ; irow--) {
-        glReadPixels(0, irow, w, 1, GL_BGR, GL_UNSIGNED_BYTE, buffer);
-        buffer += 3*w;
-    }
-
-}
-
 #if 0
 static void local_render(Display *dpy, int w, int h) {
 static int first;
@@ -254,6 +224,7 @@ if(!first) {
 }
 #endif
 
+#if 0
 static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
 {
 //    int x=0, y=0, width=16, height=16;
@@ -266,17 +237,18 @@ static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
     GLXPixmap             glxPixmap;
     int                   numReturned;
 
-    fbConfigs = glXChooseFBConfig( dpy, DefaultScreen(dpy),
-                                   singleBufferAttributess, &numReturned );
+//    fbConfigs = glXChooseFBConfig( dpy, DefaultScreen(dpy),
+//                                   singleBufferAttributess, &numReturned );
 
-    if (numReturned==0) {
-        fprintf(stderr, "No matching configs found.\n" );
-        exit(-1);
-    }
+//    if (numReturned==0) {
+//        fprintf(stderr, "No matching configs found.\n" );
+//        exit(-1);
+//    }
 
     xPixmap = XCreatePixmap(dpy, DefaultRootWindow(dpy), 300, 300, 24); // FIXMEIM Need to find a way to free this
-    glxPixmap = glXCreatePixmap( dpy, fbConfigs[0], xPixmap, NULL); // FIXMEIM we really should try harder to match the guests visual...
+//    glxPixmap = glXCreatePixmap( dpy, fbConfigs[0], xPixmap, NULL); // FIXMEIM we really should try harder to match the guests visual...
 
+    glxPixmap = glXCreateGLXPixmap( dpy, vis, xPixmap); // FIXMEIM we really should try harder to match the guests visual...
 #if 0
 {
      XSetWindowAttributes attr = { 0 };
@@ -305,6 +277,7 @@ static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
 
     return glxPixmap;
 }
+#endif
 
 typedef struct {
     void *key;
@@ -434,6 +407,75 @@ typedef struct {
 
 static ProcessState processes[MAX_HANDLED_PROCESS];
 
+
+void alloc_pixmap(Display *dpy, XVisualInfo *vis, GLState *glstate, int w, int h) {
+
+    fprintf(stderr, "alloc_pixmap %d x %d\n", w, h);
+    glstate->pixmap = XCreatePixmap(dpy, DefaultRootWindow(dpy), w, h, vis->depth);
+    glstate->drawable = glXCreateGLXPixmap(dpy, vis, glstate->pixmap);
+    XFlush(dpy);
+}
+
+XVisualInfo *get_association_fakecontext_visual(
+                ProcessState *process, int fakecontext);
+typedef void *ClientGLXDrawable;
+ClientGLXDrawable get_association_serverdrawable_clientdrawable(
+                ProcessState *process, GLXDrawable serverdrawable);
+
+void blit_drawable_to_guest(Display *dpy, GLXDrawable drawable, ProcessState *process, int w, int h, int stride, char *buffer)
+{
+    int irow;
+    fprintf(stderr, "give_update to: %08x\n", drawable);
+    fprintf(stderr, "dim %d x %d\n", w, h);
+    fprintf(stderr, "buf %08x\n", buffer);
+
+    // if resizd, reallocate. else...
+    if(!buffer) {
+        int i;
+        XVisualInfo *vis;
+        ClientGLXDrawable client_drawable = get_association_serverdrawable_clientdrawable(
+                process, drawable);
+
+         fprintf(stderr, "Lookup: %08x\n", drawable);
+//        fprintf(stderr, "dim %d x %d\n", w, h);
+        /* Lookup GLState struct for this drawable */
+        GLState *glstate = NULL;
+        for (i = 0; i < process->nb_states; i ++) {
+//            fprintf(stderr, "cmp %08x %08x\n", process->glstates[i]->drawable, drawable);
+            if (process->glstates[i]->drawable == drawable) {
+                glstate = process->glstates[i];
+                break;
+            }
+        }
+
+	if(!glstate)
+	    return;
+
+        vis = get_association_fakecontext_visual(process, glstate->fake_ctxt);
+
+        if (!vis)
+            vis = get_default_visual(dpy);
+
+	glXDestroyGLXPixmap(dpy, glstate->drawable);
+	XFreePixmap(dpy, glstate->pixmap);
+        fprintf(stderr, "re");
+        alloc_pixmap(dpy, vis, glstate, w, h); // Make current?
+        glXMakeCurrent(dpy, glstate->drawable, glstate->context);
+
+         fprintf(stderr, "Replace: %08x\n", glstate->drawable);
+	set_association_clientdrawable_serverdrawable(process,
+                                            client_drawable, glstate->drawable);
+        return;
+    }
+
+    for(irow = h-1 ; irow >= 0 ; irow--) {
+        glReadPixels(0, irow, w, 1, GL_BGR, GL_UNSIGNED_BYTE, buffer);
+        buffer += stride;
+    }
+
+}
+
+
 void init_process_tab()
 {
     memset(processes, 0, sizeof(processes));
@@ -450,7 +492,7 @@ void init_process_tab()
 
 #include "server_stub.c"
 
-typedef void *ClientGLXDrawable;
+//typedef void *ClientGLXDrawable;
 static inline ClientGLXDrawable to_drawable(arg_t arg)
 {
 #ifdef TARGET_X86_64
@@ -1261,8 +1303,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                     process, client_drawable);
 
 //            local_render(dpy, params[0], params[1]);
-            blit_drawable_to_guest(dpy, drawable, params[0], params[1],
-                                   (char*)args[2]);
+            blit_drawable_to_guest(dpy, drawable, process, params[0], params[1],
+                                   (int)args[2], (char*)args[3]);
             break;
 
             if (drawable) {
@@ -1421,7 +1463,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             XVisualInfo *vis = get_visual_info_from_visual_id(dpy, visualid);
             GLXContext ctxt;
 
-    {
+    while(0){
        GLXFBConfig          *fbConfigs;
        int                   numReturned;
 
@@ -1438,7 +1480,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                       NULL, True );
     }
 
-#if 0
             if (vis) {
                 ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
             } else {
@@ -1449,7 +1490,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
                 vis->visualid = saved_visualid;
             }
-#endif
 
             if (ctxt) {
                 int fake_ctxt = ++process->next_available_context_number;
@@ -1609,7 +1649,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         {
             int i;
             ClientGLXDrawable client_drawable = to_drawable(args[1]);
-            GLXDrawable host_drawable = 0;
             int fake_ctxt = (int) args[2];
             GLXContext ctxt = NULL;
 
@@ -1626,49 +1665,52 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 if(!ctxt) {
                     fprintf(stderr, "invalid fake_ctxt (%d)!\n", fake_ctxt);
                 } else {
+                     /* Lookup GLState struct for this context */
+                     GLState *glstate;
+                     for (i = 0; i < process->nb_states; i ++)
+                         if (process->glstates[i]->fake_ctxt == fake_ctxt)
+                             break;
+                     if (i == process->nb_states) {
+                        fprintf(stderr, "error remembering the new context\n");
+                        exit(-1);
+                     }
+                     glstate = process->glstates[i];
+
                      //FIXMEIM - the order of lookup seems wrong here. might be faster to lookup in a different order.
                     /* If the host drawable is a pbuffer, lookup the associated
                        context */
-                    host_drawable = (GLXDrawable)
+                    glstate->drawable = (GLXDrawable)
                                         get_association_fakepbuffer_pbuffer(
                                                 process, client_drawable);
-                    if(!host_drawable) {
+                    if(!glstate->drawable) {
                         /* else try to lookup ordinary drawable */
-                        host_drawable = get_association_clientdrawable_serverdrawable(
+                        glstate->drawable = get_association_clientdrawable_serverdrawable(
                                         process, client_drawable);
-                        if (!host_drawable) {
+                        if (!glstate->drawable) {
                             /* else, create an ordinary drawable */
                             XVisualInfo *vis = get_association_fakecontext_visual(
                                             process, fake_ctxt);
+
                             if (!vis)
                                 vis = get_default_visual(dpy);
 
-                            host_drawable = create_window(dpy, vis);
-    
-                            fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)host_drawable, (unsigned long int)client_drawable);
+                            alloc_pixmap(dpy, vis, glstate, 800, 500);
+
+                            fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
 
                             set_association_clientdrawable_serverdrawable(process,
-                                            client_drawable, host_drawable);
+                                            client_drawable, glstate->drawable);
                         }
                     }
 
-                    /* By here, we have a context and a drawable */
-                    /* Try to store the state. */
-                    for (i = 0; i < process->nb_states; i ++) {
-                        if (process->glstates[i]->fake_ctxt == fake_ctxt) {
-                            process->current_state = process->glstates[i];
-                            process->current_state->drawable = host_drawable;
-                            break;
-                        }
+                    if(!glstate->drawable){
+                        fprintf(stderr, "No drawable!\n");
+                        exit(1);
                     }
 
-                    if (i == process->nb_states) {
-                        fprintf(stderr, "error remembering the new context\n");
-                        exit(-1);
-                    }
+                    process->current_state = glstate;
 
-
-                    ret.i = glXMakeCurrent(dpy, host_drawable, ctxt);
+                    ret.i = glXMakeCurrent(dpy, glstate->drawable, ctxt);
                 }
             }
             break;
