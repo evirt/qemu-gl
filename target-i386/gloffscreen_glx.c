@@ -147,8 +147,15 @@ void glo_surface_destroy(GloSurface *surface) {
 
 /* Make the given surface current */
 void glo_surface_makecurrent(GloSurface *surface) {
-    glXMakeContextCurrent( glo.dpy,
-        surface->glxPixmap, surface->glxPixmap, surface->context );
+    if (!glo_inited)
+      glo_init();
+
+    if (surface) {
+      glXMakeContextCurrent( glo.dpy,
+              surface->glxPixmap, surface->glxPixmap, surface->context );
+    } else {
+      glXMakeCurrent(glo.dpy, 0, NULL);
+    }
 }
 
 /* Get the contents of the given surface */
@@ -205,5 +212,11 @@ void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
       *width = surface->width;
     if (height)
       *height = surface->height;
+}
+
+Display *glo_get_dpy(void) {
+  if (!glo_inited)
+        glo_init();
+  return glo.dpy;
 }
 #endif

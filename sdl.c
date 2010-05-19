@@ -866,11 +866,6 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
 	fprintf(stderr, "SDL fail\n");
 	exit(1);
     }
-    if (info.subsystem == SDL_SYSWM_X11 && info.info.x11.display) {
-        opengl_exec_set_parent_window(info.info.x11.display,
-                        RootWindow(info.info.x11.display,
-                                DefaultScreen(info.info.x11.display)));
-	}
 
     vi = SDL_GetVideoInfo();
     host_format = *(vi->vfmt);
