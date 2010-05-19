@@ -241,7 +241,12 @@ void glo_surface_destroy(GloSurface *surface) {
 
 /* Make the given surface current */
 void glo_surface_makecurrent(GloSurface *surface) {
+  if (surface) {
     wglMakeCurrent( surface->hDC, surface->hRC );
+  } else {
+    wglMakeCurrent( NULL, NULL );
+  }
+
 }
 
 /* Get the contents of the given surface */
