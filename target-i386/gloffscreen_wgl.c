@@ -163,7 +163,7 @@ void glo_kill(void) {
 
 /* Create a surface with given width and height, formatflags are from the
  * GLO_ constants */
-GloSurface *glo_surface_create(int width, int height, int formatFlags) {
+GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurface *shareWith) {
     GloSurface           *surface;
     int                   rgbaBits[4];
     // pixel format attributes
