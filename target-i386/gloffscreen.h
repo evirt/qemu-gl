@@ -49,7 +49,7 @@ typedef struct _GloSurface GloSurface;
 #define GLO_FF_STENCIL_8      (0x0100)
 
 /* The only currently supported format */
-#define GLO_FF_DEFAULT     (GLO_FF_BITS_32|GLO_FF_ALPHA)
+#define GLO_FF_DEFAULT     GLO_FF_BITS_24//(GLO_FF_BITS_32|GLO_FF_ALPHA)
 
 /* Initialise gloffscreen */
 extern void glo_init(void);
@@ -59,7 +59,7 @@ extern void glo_kill(void);
 
 /* Create a surface with given width and height, formatflags are from the
  * GLO_ constants */
-extern GloSurface *glo_surface_create(int width, int height, int formatFlags);
+extern GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurface *shareWith);
 
 /* Destroy the given surface */
 extern void glo_surface_destroy(GloSurface *surface);

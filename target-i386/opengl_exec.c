@@ -3,6 +3,7 @@
  *
  *  Copyright (c) 2006,2007 Even Rouault
  *  Copyright (c) 2009,2010 Ian Molton <ian.molton@collabora.co.uk>
+ *  Copyright (c) 2009,2010 Gordon Williams <gordon.williams@collabora.co.uk>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -298,8 +299,9 @@ typedef struct {
     int ref;
     int fake_ctxt;
     int fake_shareList;
+    int formatFlags; // format flags for gloffscreen (created from fbconfig etc when config created)
 
-    GloSurface *drawable;
+    GloSurface *drawable; // current drawable set with MakeCurrent (*not* owned by this but by the assoc)
 
     void *vertexPointer;
     void *normalPointer;
@@ -378,7 +380,6 @@ typedef struct {
     int fbconfigs_max[MAX_FBCONFIG];
     int nfbconfig_total;
 
-    Assoc association_fakecontext_glxcontext[MAX_ASSOC_SIZE];
     Assoc association_fakepbuffer_pbuffer[MAX_ASSOC_SIZE];
     Assoc association_clientdrawable_serverdrawable[MAX_ASSOC_SIZE];
     Assoc association_fakecontext_visual[MAX_ASSOC_SIZE];
@@ -392,7 +393,7 @@ typedef struct {
 static ProcessState processes[MAX_HANDLED_PROCESS];
 
 
-void alloc_surface(Display *dpy, XVisualInfo *vis, GLState *glstate, int w, int h) {
+GloSurface *alloc_surface(Display *dpy, XVisualInfo *vis, GLState *glstate, GloSurface *shareWith, int w, int h) {
     fprintf(stderr, "alloc_surface %d x %d\n", w, h);
     int format = GLO_FF_DEFAULT & ~GLO_FF_BITS_MASK;
     if (vis->depth == 16)
@@ -402,7 +403,7 @@ void alloc_surface(Display *dpy, XVisualInfo *vis, GLState *glstate, int w, int 
     else
       format |= GLO_FF_BITS_32;
 
-    glstate->drawable = glo_surface_create(w, h, format);
+    return glo_surface_create(w, h, format, shareWith);
 }
 
 XVisualInfo *get_association_fakecontext_visual(
@@ -410,6 +411,8 @@ XVisualInfo *get_association_fakecontext_visual(
 typedef void *ClientGLXDrawable;
 ClientGLXDrawable get_association_serverdrawable_clientdrawable(
                 ProcessState *process, GloSurface *serverdrawable);
+GloSurface *get_association_clientdrawable_serverdrawable(
+                ProcessState *process, ClientGLXDrawable clientdrawable);
 
 void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *process, int w, int h, int stride, char *buffer)
 {
@@ -427,7 +430,7 @@ void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *pr
 
         fprintf(stderr, "Lookup: %08x\n", drawable);
 //        fprintf(stderr, "dim %d x %d\n", w, h);
-        /* Lookup GLState struct for this drawable */
+        /* Lookup GLState struct for this drawable - eg one that has been glXMakeCurrent-ed */
         GLState *glstate = NULL;
         for (i = 0; i < process->nb_states; i ++) {
 //            fprintf(stderr, "cmp %08x %08x\n", process->glstates[i]->drawable, drawable);
@@ -445,14 +448,22 @@ void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *pr
         if (!vis)
             vis = get_default_visual(dpy);
 
-        glo_surface_destroy(glstate->drawable);
         fprintf(stderr, "re");
-        alloc_surface(dpy, vis, glstate, w, h); // Make current?
-        glo_surface_makecurrent(glstate->drawable);
+
+        GloSurface *oldSurface = get_association_clientdrawable_serverdrawable(process,
+            client_drawable);
+
+        GloSurface *surface = alloc_surface(dpy, vis, glstate, oldSurface, w, h); // Make current?
+        if (glstate->drawable != oldSurface)
+          fprintf(stderr, "glstate->drawable != oldSurface - not MadeCurrent??\n");
+        glstate->drawable = surface;
 
         fprintf(stderr, "Replace: %08x\n", glstate->drawable);
+        if (oldSurface) glo_surface_destroy(oldSurface);
         set_association_clientdrawable_serverdrawable(process,
                                             client_drawable, glstate->drawable);
+
+        glo_surface_makecurrent(glstate->drawable);
         return;
     }
 
@@ -488,6 +499,7 @@ static inline ClientGLXDrawable to_drawable(arg_t arg)
     return (void *) (unsigned long) arg;
 }
 
+#if 0 //GW
 GLXContext get_association_fakecontext_glxcontext(
                 ProcessState *process, int fakecontext)
 {
@@ -541,6 +553,7 @@ void unset_association_fakecontext_glxcontext(
             return;
         }
 }
+#endif
 
 /* ---- */
 
@@ -1032,7 +1045,7 @@ static GLuint translate_id(GLsizei n, GLenum type, const GLvoid *list)
     }
 }
 
-void _create_context(ProcessState *process, int fake_ctxt, int fake_shareList)
+GLState *_create_context(ProcessState *process, int fake_ctxt, int fake_shareList)
 {
     process->glstates =
         qemu_realloc(process->glstates,
@@ -1066,6 +1079,16 @@ void _create_context(ProcessState *process, int fake_ctxt, int fake_shareList)
         }
     }
     process->nb_states++;
+    return process->glstates[process->nb_states-1];
+}
+
+GLState *get_glstate_for_fake_ctxt(ProcessState *process, int fake_ctxt)
+{
+  int i;
+  for (i = 0; i < process->nb_states; i++)
+    if (process->glstates[i]->fake_ctxt == fake_ctxt)
+      return process->glstates[i];
+  return 0;
 }
 
 void disconnect(ProcessState *process)
@@ -1073,15 +1096,7 @@ void disconnect(ProcessState *process)
     int i;
     Display *dpy = glo_get_dpy();
 
-    glXMakeCurrent(dpy, 0, NULL);
-
-    for (i = 0; i < MAX_ASSOC_SIZE &&
-                    process->association_fakecontext_glxcontext[i].key; i ++) {
-        GLXContext ctxt = process->association_fakecontext_glxcontext[i].value;
-        glXDestroyContext(dpy, ctxt);
-    }
     GET_EXT_PTR(void, glXDestroyPbuffer, (Display *, GLXPbuffer));
-
     for (i = 0; i < MAX_ASSOC_SIZE &&
                     process->association_fakepbuffer_pbuffer[i].key; i ++) {
         GLXPbuffer pbuffer = (GLXPbuffer)
@@ -1096,9 +1111,8 @@ void disconnect(ProcessState *process)
             association_clientdrawable_serverdrawable[i].value;
 
         glo_surface_destroy(surface);
-
-        break; /* TODO */
     }
+
 
     for (i = 0; i < process->nb_states; i++) {
         destroy_gl_state(process->glstates[i]);
@@ -1207,7 +1221,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             blit_drawable_to_guest(dpy, drawable, process, params[0], params[1],
                                    (int)args[2], (char*)args[3]);
             break;
-#if 0
+#if 0 //GW?
             if (drawable) {
                 WindowPosStruct pos;
 
@@ -1339,8 +1353,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 fprintf(stderr, "visualid=%d, fake_shareList=%d\n", visualid,
                         fake_shareList);
 
-            GLXContext shareList = get_association_fakecontext_glxcontext(
-                            process, fake_shareList);
+            GLXContext shareList = get_glstate_for_fake_ctxt(process, fake_shareList);
             XVisualInfo *vis = get_visual_info_from_visual_id(dpy, visualid);
             GLXContext ctxt;
 #if 0
@@ -1390,11 +1403,10 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int fake_ctxt = ++process->next_available_context_number;
 
             set_association_fakecontext_visual(process, fake_ctxt, vis);
-            set_association_fakecontext_glxcontext(process, fake_ctxt,
-                                                   ctxt);
             ret.i = fake_ctxt;
 
-            _create_context(process, fake_ctxt, fake_shareList);
+            GLState *state = _create_context(process, fake_ctxt, fake_shareList);
+            state->formatFlags = GLO_FF_DEFAULT; // FIXME GW get from visual
 
             break;
         }
@@ -1427,13 +1439,16 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
                 ret.i = fake_ctxt;
 
-                _create_context(process, fake_ctxt, fake_shareList);
+                GLState *state = _create_context(process, fake_ctxt, fake_shareList);
+                state->formatFlags = GLO_FF_DEFAULT; // FIXME GW get from fbconfig
             }
             break;
         }
 
     case glXCopyContext_func:
         {
+          fprintf(stderr, " glXCopyContext not supported\n");
+#if 0 //GW
             int fake_src_ctxt = (int) args[1];
             int fake_dst_ctxt = (int) args[2];
             GLXContext src_ctxt;
@@ -1454,7 +1469,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                 fake_dst_ctxt);
             } else
                 glXCopyContext(dpy, src_ctxt, dst_ctxt, args[3]);
-
+#endif
             break;
         }
 
@@ -1465,67 +1480,53 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             if (display_function_call)
                 fprintf(stderr, "fake_ctxt=%d\n", fake_ctxt);
 
-            GLXContext ctxt = get_association_fakecontext_glxcontext(
-                            process, fake_ctxt);
-            if (ctxt == NULL) {
-                fprintf(stderr, "invalid fake_ctxt (%p) !\n",
-                        (void *) (long) fake_ctxt);
-            } else {
-                int i;
+            int i;
+            for (i = 0; i < process->nb_states; i ++) {
+                if (process->glstates[i]->fake_ctxt == fake_ctxt) {
+                    // this was our GLState...
+                    process->current_state = &process->default_state;
 
-                for (i = 0; i < process->nb_states; i ++) {
-                    if (process->glstates[i]->fake_ctxt == fake_ctxt) {
-#if 0 //GW
-                        if (ctxt == process->current_state->context)
-#endif
-                            process->current_state = &process->default_state;
+                    int fake_shareList =
+                        process->glstates[i]->fake_shareList;
+                    process->glstates[i]->ref--;
+                    if (process->glstates[i]->ref == 0) {
+                        fprintf(stderr,
+                                "destroy_gl_state fake_ctxt = %d\n",
+                                process->glstates[i]->fake_ctxt);
+                        destroy_gl_state(process->glstates[i]);
+                        qemu_free(process->glstates[i]);
+                        memmove(&process->glstates[i],
+                                &process->glstates[i + 1],
+                                (process->nb_states - i - 1) *
+                                sizeof(GLState *));
+                        process->nb_states --;
+                    }
 
-                        int fake_shareList =
-                            process->glstates[i]->fake_shareList;
-                        process->glstates[i]->ref--;
-                        if (process->glstates[i]->ref == 0) {
-                            fprintf(stderr,
-                                    "destroy_gl_state fake_ctxt = %d\n",
-                                    process->glstates[i]->fake_ctxt);
-                            destroy_gl_state(process->glstates[i]);
-                            qemu_free(process->glstates[i]);
-                            memmove(&process->glstates[i],
-                                    &process->glstates[i + 1],
-                                    (process->nb_states - i - 1) *
-                                    sizeof(GLState *));
-                            process->nb_states --;
-                        }
-
-                        if (fake_shareList) {
-                            for (i = 0; i < process->nb_states; i++) {
-                                if (process->glstates[i]->fake_ctxt ==
-                                    fake_shareList) {
-                                    process->glstates[i]->ref--;
-                                    if (process->glstates[i]->ref == 0) {
-                                        fprintf(stderr,
-                                                "destroy_gl_state fake_ctxt = %d\n",
-                                                process->glstates[i]->
-                                                fake_ctxt);
-                                        destroy_gl_state(process->
-                                                         glstates[i]);
-                                        qemu_free(process->glstates[i]);
-                                        memmove(&process->glstates[i],
-                                                &process->glstates[i + 1],
-                                                (process->nb_states - i - 1) *
-                                                sizeof(GLState *));
-                                        process->nb_states --;
-                                    }
-                                    break;
+                    if (fake_shareList) {
+                        for (i = 0; i < process->nb_states; i++) {
+                            if (process->glstates[i]->fake_ctxt ==
+                                fake_shareList) {
+                                process->glstates[i]->ref--;
+                                if (process->glstates[i]->ref == 0) {
+                                    fprintf(stderr,
+                                            "destroy_gl_state fake_ctxt = %d\n",
+                                            process->glstates[i]->
+                                            fake_ctxt);
+                                    destroy_gl_state(process->
+                                                     glstates[i]);
+                                    qemu_free(process->glstates[i]);
+                                    memmove(&process->glstates[i],
+                                            &process->glstates[i + 1],
+                                            (process->nb_states - i - 1) *
+                                            sizeof(GLState *));
+                                    process->nb_states --;
                                 }
+                                break;
                             }
                         }
-
-                        glXDestroyContext(dpy, ctxt);
-                        unset_association_fakecontext_glxcontext(
-                                        process, fake_ctxt);
-
-                        break;
                     }
+
+                    break;
                 }
             }
             break;
@@ -1548,7 +1549,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int i;
             ClientGLXDrawable client_drawable = to_drawable(args[1]);
             int fake_ctxt = (int) args[2];
-            GLXContext ctxt = NULL;
+            GLState *glstate = NULL;
 
             if (display_function_call)
                 fprintf(stderr, "client_drawable=%p fake_ctx=%d\n",
@@ -1557,29 +1558,19 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             if (client_drawable == 0 && fake_ctxt == 0) {
                 /* Release context */
                 process->current_state = &process->default_state;
-            } else { /* look up host drawable and context */
-                ctxt = get_association_fakecontext_glxcontext(
-                              process, fake_ctxt);
-                if(!ctxt) {
+            } else { /* Lookup GLState struct for this context */
+                glstate = get_glstate_for_fake_ctxt(process, fake_ctxt);
+                if (!glstate) {
                     fprintf(stderr, "invalid fake_ctxt (%d)!\n", fake_ctxt);
                 } else {
-                     /* Lookup GLState struct for this context */
-                     GLState *glstate;
-                     for (i = 0; i < process->nb_states; i ++)
-                         if (process->glstates[i]->fake_ctxt == fake_ctxt)
-                             break;
-                     if (i == process->nb_states) {
-                        fprintf(stderr, "error remembering the new context\n");
-                        exit(-1);
-                     }
-                     glstate = process->glstates[i];
-
                      //FIXMEIM - the order of lookup seems wrong here. might be faster to lookup in a different order.
                     /* If the host drawable is a pbuffer, lookup the associated
                        context */
+#if 0 //GW
                     glstate->drawable = (GLXDrawable)
                                         get_association_fakepbuffer_pbuffer(
                                                 process, client_drawable);
+#endif
                     if(!glstate->drawable) {
                         /* else try to lookup ordinary drawable */
                         glstate->drawable = get_association_clientdrawable_serverdrawable(
@@ -1592,12 +1583,13 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                             if (!vis)
                                 vis = get_default_visual(dpy);
 
-                            alloc_surface(dpy, vis, glstate, 800, 500);
+                            glstate->drawable = alloc_surface(dpy, vis, glstate, 0, 800, 500);
 
                             fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
 
                             set_association_clientdrawable_serverdrawable(process,
                                             client_drawable, glstate->drawable);
+
                         }
                     }
 
@@ -1608,7 +1600,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
                     process->current_state = glstate;
 
-                    ret.i = glXMakeCurrent(dpy, glstate->drawable, ctxt);
+                    ret.i = 1;//GW glXMakeCurrent(dpy, glstate->drawable, ctxt);
                 }
             }
             break;
@@ -1639,16 +1631,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         {
             int fake_ctxt = (int) args[1];
 
-            if (display_function_call)
-                fprintf(stderr, "fake_ctx=%x\n", fake_ctxt);
-            GLXContext ctxt =
-                get_association_fakecontext_glxcontext(process, fake_ctxt);
-            if (ctxt == NULL) {
-                fprintf(stderr, "invalid fake_ctxt (%x) !\n", fake_ctxt);
-                ret.c = False;
-            } else {
-                ret.c = glXIsDirect(dpy, ctxt);
-            }
+            // Does this go direct and skip the X server? We'll just say yes for now.
+            ret.c = True;
+
             break;
         }
 
@@ -2030,6 +2015,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXQueryContext_func:
         {
+            fprintf(stderr, "glXQueryContext not implemented\n");
+            ret.i = 0;
+#if 0 //GW
             GET_EXT_PTR(int, glXQueryContext,
                         (Display *, GLXContext, int, int *));
             int fake_ctxt = (int) args[1];
@@ -2046,11 +2034,17 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                     ptr_func_glXQueryContext(dpy, ctxt, args[2],
                                              (int *) args[3]);
             }
+#endif
             break;
         }
 
     case glXQueryDrawable_func:
         {
+            // TODO GW one of:
+            // GLX_WIDTH, GLX_HEIGHT, GLX_PRESERVED_CONTENTS, GLX_LARGEST_PBUFFER, GLX_FBCONFIG_ID
+            fprintf(stderr, "glXQueryDrawable not implemented\n");
+            ret.i = 0;
+#if 0 //GW
             GET_EXT_PTR(void, glXQueryDrawable,
                         (Display *, GLXDrawable, int, int *));
             ClientGLXDrawable client_drawable = to_drawable(args[1]);
@@ -2068,7 +2062,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             else
                 ptr_func_glXQueryDrawable(dpy, drawable,
                                 args[2], (int *) args[3]);
-
+#endif
             break;
         }
 
@@ -2090,6 +2084,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXCreateContextWithConfigSGIX_func:
         {
+            printf("glXCreateContextWithConfigSGIX not implemented\n");
+#if 0 //GW
             GET_EXT_PTR(GLXContext, glXCreateContextWithConfigSGIX,
                         (Display *, GLXFBConfigSGIX, int, GLXContext, int));
             int client_fbconfig = args[1];
@@ -2109,6 +2105,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                 process, fake_ctxt, ctxt);
                 ret.i = fake_ctxt;
             }
+#endif
             break;
         }
 
