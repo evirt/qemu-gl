@@ -40,6 +40,7 @@
 #include "mesa_mipmap.h"
 #include "opengl_process.h"
 #include "opengl_utils.h"
+#include "gloffscreen.h"
 
 void *qemu_malloc(size_t size);
 void *qemu_realloc(void *ptr, size_t size);
@@ -132,17 +133,6 @@ static XVisualInfo *get_default_visual(Display *dpy)
 
     return vis;
 }
-
-
-static Display *parent_dpy = NULL;
-static Window qemu_parent_window = 0;
-
-void opengl_exec_set_parent_window(Display *_dpy, Window _parent_window)
-{
-    parent_dpy = _dpy;
-    qemu_parent_window = _parent_window;
-}
-
 
 /* -----------------HUGE HUGE HACK ------------------------ */
 
@@ -293,11 +283,8 @@ typedef struct {
 
 
 typedef struct {
-    int x;
-    int y;
     int width;
     int height;
-    int map_state;
 } WindowPosStruct;
 
 typedef struct {
@@ -312,8 +299,7 @@ typedef struct {
     int fake_ctxt;
     int fake_shareList;
     GLXContext context;
-    GLXDrawable drawable;
-    GLXPixmap pixmap;
+    GloSurface *drawable;
 
     void *vertexPointer;
     void *normalPointer;
@@ -397,8 +383,6 @@ typedef struct {
     Assoc association_clientdrawable_serverdrawable[MAX_ASSOC_SIZE];
     Assoc association_fakecontext_visual[MAX_ASSOC_SIZE];
 
-    Display *dpy;
-
     int primitive;
     int bufsize;
     int bufstart;
@@ -408,21 +392,26 @@ typedef struct {
 static ProcessState processes[MAX_HANDLED_PROCESS];
 
 
-void alloc_pixmap(Display *dpy, XVisualInfo *vis, GLState *glstate, int w, int h) {
+void alloc_surface(Display *dpy, XVisualInfo *vis, GLState *glstate, int w, int h) {
+    fprintf(stderr, "alloc_surface %d x %d\n", w, h);
+    int format = GLO_FF_DEFAULT & ~GLO_FF_BITS_MASK;
+    if (vis->depth == 16)
+      format |= GLO_FF_BITS_16;
+    else if (vis->depth == 16)
+      format |= GLO_FF_BITS_24;
+    else
+      format |= GLO_FF_BITS_32;
 
-    fprintf(stderr, "alloc_pixmap %d x %d\n", w, h);
-    glstate->pixmap = XCreatePixmap(dpy, DefaultRootWindow(dpy), w, h, vis->depth);
-    glstate->drawable = glXCreateGLXPixmap(dpy, vis, glstate->pixmap);
-    XFlush(dpy);
+    glstate->drawable = glo_surface_create(w, h, format);
 }
 
 XVisualInfo *get_association_fakecontext_visual(
                 ProcessState *process, int fakecontext);
 typedef void *ClientGLXDrawable;
 ClientGLXDrawable get_association_serverdrawable_clientdrawable(
-                ProcessState *process, GLXDrawable serverdrawable);
+                ProcessState *process, GloSurface *serverdrawable);
 
-void blit_drawable_to_guest(Display *dpy, GLXDrawable drawable, ProcessState *process, int w, int h, int stride, char *buffer)
+void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *process, int w, int h, int stride, char *buffer)
 {
     int irow;
     fprintf(stderr, "give_update to: %08x\n", drawable);
@@ -436,7 +425,7 @@ void blit_drawable_to_guest(Display *dpy, GLXDrawable drawable, ProcessState *pr
         ClientGLXDrawable client_drawable = get_association_serverdrawable_clientdrawable(
                 process, drawable);
 
-         fprintf(stderr, "Lookup: %08x\n", drawable);
+        fprintf(stderr, "Lookup: %08x\n", drawable);
 //        fprintf(stderr, "dim %d x %d\n", w, h);
         /* Lookup GLState struct for this drawable */
         GLState *glstate = NULL;
@@ -456,23 +445,18 @@ void blit_drawable_to_guest(Display *dpy, GLXDrawable drawable, ProcessState *pr
         if (!vis)
             vis = get_default_visual(dpy);
 
-	glXDestroyGLXPixmap(dpy, glstate->drawable);
-	XFreePixmap(dpy, glstate->pixmap);
+        glo_surface_destroy(glstate->drawable);
         fprintf(stderr, "re");
-        alloc_pixmap(dpy, vis, glstate, w, h); // Make current?
-        glXMakeCurrent(dpy, glstate->drawable, glstate->context);
+        alloc_surface(dpy, vis, glstate, w, h); // Make current?
+        glo_surface_makecurrent(glstate->drawable);
 
-         fprintf(stderr, "Replace: %08x\n", glstate->drawable);
-	set_association_clientdrawable_serverdrawable(process,
+        fprintf(stderr, "Replace: %08x\n", glstate->drawable);
+        set_association_clientdrawable_serverdrawable(process,
                                             client_drawable, glstate->drawable);
         return;
     }
 
-    for(irow = h-1 ; irow >= 0 ; irow--) {
-        glReadPixels(0, irow, w, 1, GL_BGR, GL_UNSIGNED_BYTE, buffer);
-        buffer += stride;
-    }
-
+    glo_surface_getcontents(drawable, buffer);
 }
 
 
@@ -652,7 +636,7 @@ void unset_association_fakepbuffer_pbuffer(ProcessState *process,
 
 /* ---- */
 
-GLXDrawable get_association_clientdrawable_serverdrawable(
+GloSurface *get_association_clientdrawable_serverdrawable(
                 ProcessState *process, ClientGLXDrawable clientdrawable)
 {
     int i;
@@ -663,21 +647,21 @@ GLXDrawable get_association_clientdrawable_serverdrawable(
         if ((ClientGLXDrawable) process->
                         association_clientdrawable_serverdrawable[i].key ==
                         clientdrawable)
-            return (GLXDrawable) process->
+            return (GloSurface*)process->
                 association_clientdrawable_serverdrawable[i].value;
 
-    return (GLXDrawable) 0;
+    return (GloSurface*) 0;
 }
 
 ClientGLXDrawable get_association_serverdrawable_clientdrawable(
-                ProcessState *process, GLXDrawable serverdrawable)
+                ProcessState *process, GloSurface *serverdrawable)
 {
     int i;
 
     for (i = 0; i < MAX_ASSOC_SIZE &&
                     process->association_clientdrawable_serverdrawable[i].key;
                     i ++)
-        if ((GLXDrawable) process->
+        if ((GloSurface*)process->
                         association_clientdrawable_serverdrawable[i].value ==
                         serverdrawable)
             return (ClientGLXDrawable)
@@ -688,7 +672,7 @@ ClientGLXDrawable get_association_serverdrawable_clientdrawable(
 
 void set_association_clientdrawable_serverdrawable(
                 ProcessState *process, ClientGLXDrawable clientdrawable,
-                GLXDrawable serverdrawable)
+                GloSurface *serverdrawable)
 {
     int i;
 
@@ -706,25 +690,6 @@ void set_association_clientdrawable_serverdrawable(
                 (void *) serverdrawable;
     } else
         fprintf(stderr, "MAX_ASSOC_SIZE reached\n");
-}
-
-static void _get_window_pos(Display *dpy, Window win, WindowPosStruct *pos)
-{
-    return;
-    XWindowAttributes window_attributes_return;
-    Window child;
-    int x, y;
-    Window root = DefaultRootWindow(dpy);
-
-    XGetWindowAttributes(dpy, win, &window_attributes_return);
-    XTranslateCoordinates(dpy, win, root, 0, 0, &x, &y, &child);
-    /* printf("%d %d %d %d\n", x, y, window_attributes_return.width,
-     * window_attributes_return.height); */
-    pos->x = x;
-    pos->y = y;
-    pos->width = window_attributes_return.width;
-    pos->height = window_attributes_return.height;
-    pos->map_state = window_attributes_return.map_state;
 }
 
 static int is_gl_vendor_ati(Display *dpy)
@@ -1131,30 +1096,12 @@ void disconnect(ProcessState *process)
 
     for (i = 0; i < MAX_ASSOC_SIZE && process->
                     association_clientdrawable_serverdrawable[i].key; i ++) {
-        Window win = (Window) process->
-                association_clientdrawable_serverdrawable[i].value;
+        GloSurface *surface = (GloSurface *) process->
+            association_clientdrawable_serverdrawable[i].value;
 
-//        XDestroyWindow(dpy, win);
+        glo_surface_destroy(surface);
 
-//FIXMEIM - wtf is this for?
-        int loop = 0;
-        while (loop) {
-            while (XPending(dpy) > 0) {
-                XEvent event;
-
-                XNextEvent(dpy, &event);
-                switch (event.type) {
-                case DestroyNotify:
-                    {
-                        if (((XDestroyWindowEvent *) &event)->window == win)
-                            loop = 0;
-                        break;
-                    }
-                }
-            }
-            break; /* TODO */
-        }
-
+        break; /* TODO */
     }
 
     for (i = 0; i < process->nb_states; i++) {
@@ -1198,6 +1145,7 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
             process->p.process_id = pid;
             init_gl_state(&process->default_state);
             process->current_state = &process->default_state;
+
             process->dpy = parent_dpy;
             break;
         }
@@ -1211,8 +1159,7 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
 //        fprintf(stderr, "Ctx switch: pid: %d    %08x %08x %08x\n", pid,
 //                process->dpy, process->current_state->drawable,
 //                process->current_state->context);
-        glXMakeCurrent(process->dpy, process->current_state->drawable,
-                            process->current_state->context);
+        glo_surface_makecurrent(process->current_state->drawable);
     }
 
     return (ProcessStruct *)process; // Cast is ok due to struct defn.
@@ -1243,50 +1190,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case _changeWindowState_func:
         {
         break;
-#if 0
-            ClientGLXDrawable client_drawable = to_drawable(args[0]);
-
-            if (display_function_call)
-                fprintf(stderr, "client_drawable=%p\n",
-                        (void *) client_drawable);
-
-            GLXDrawable drawable =
-                    get_association_clientdrawable_serverdrawable(
-                                    process, client_drawable);
-            if (drawable) {
-                if (args[1] == IsViewable) {
-                    WindowPosStruct pos;
-
-                    _get_window_pos(dpy, drawable, &pos);
-                    if (pos.map_state != args[1]) {
-                        XMapWindow(dpy, drawable);
-
-                        int loop = 1;   // 1;
-
-                        while (loop) {
-                            while (XPending(dpy) > 0) {
-                                XEvent event;
-
-                                XNextEvent(dpy, &event);
-                                switch (event.type) {
-                                case ConfigureNotify:
-                                    {
-                                        if (((XConfigureEvent *) &event)->
-                                            window == drawable) {
-                                            loop = 0;
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-                            break; /* TODO */
-                        }
-                    }
-                }
-            }
-
-            break;
-#endif
         }
 
     case _moveResizeWindow_func:
@@ -1306,14 +1209,13 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             blit_drawable_to_guest(dpy, drawable, process, params[0], params[1],
                                    (int)args[2], (char*)args[3]);
             break;
-
+#if 0
             if (drawable) {
                 WindowPosStruct pos;
 
-                _get_window_pos(dpy, drawable, &pos);
+                glo_surface_get_size(drawable, &pos.width, &pos.height);
                 if (!
-                    (params[0] == pos.x && params[1] == pos.y &&
-                     params[2] == pos.width && params[3] == pos.height)) {
+                    (params[2] == pos.width && params[3] == pos.height)) {
                     int redim = !(params[2] == pos.width &&
                                   params[3] == pos.height);
 
@@ -1325,30 +1227,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                       params[2], params[3]);
 
                     XSync(dpy, 0);
-#if 0
-                    int loop = 0;       // = 1
-
-                    while (loop) {
-                        while (XPending(dpy) > 0) {
-                            XEvent event;
-
-                            XNextEvent(dpy, &event);
-                            switch (event.type) {
-                            case ConfigureNotify:
-                                {
-                                    if (((XConfigureEvent *) &event)->
-                                        window == drawable) {
-                                        loop = 0;
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                    }
-#endif
                     /* The window should have resized by now, but force the
                      * new size anyway.  */
-                    _get_window_pos(dpy, drawable, &pos);
+                    //glo_surface_get_size(drawable, &pos.width, &pos.height);
                     pos.width = params[2];
                     pos.height = params[3];
                     process->currentDrawablePos = pos;
@@ -1358,6 +1239,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 }
             }
             break;
+#endif
+
         }
 
     case _send_cursor_func:
@@ -1694,7 +1577,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                             if (!vis)
                                 vis = get_default_visual(dpy);
 
-                            alloc_pixmap(dpy, vis, glstate, 800, 500);
+                            alloc_surface(dpy, vis, glstate, 800, 500);
 
                             fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
 
