@@ -59,8 +59,6 @@ static SDL_PixelFormat host_format;
 static int scaling_active = 0;
 static Notifier mouse_mode_notifier;
 
-extern void opengl_exec_set_parent_window(Display* _dpy, Window _parent_window);
-
 static void sdl_update(DisplayState *ds, int x, int y, int w, int h)
 {
     //    printf("updating x=%d y=%d w=%d h=%d\n", x, y, w, h);
@@ -126,11 +124,6 @@ static void do_sdl_resize(int new_width, int new_height, int bpp)
     if(!SDL_GetWMInfo(&info)) {
 	fprintf(stderr, "SDL fail\n");
 	exit(1);
-    }
-    if (info.subsystem == SDL_SYSWM_X11 && info.info.x11.display &&
-                    (!dpy || dpy == info.info.x11.display)) {
-        dpy = info.info.x11.display;
-        opengl_exec_set_parent_window(dpy, info.info.x11.window);
     }
 }
 
