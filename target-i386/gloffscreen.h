@@ -75,18 +75,18 @@ extern void glo_surface_getcontents(GloSurface *surface, void *data);
 extern void glo_surface_get_size(GloSurface *surface, int *width, int *height);
 
 /* Functions to decode the format flags */
-int glo_flags_get_depth_bits(int formatFlags);
-int glo_flags_get_stencil_bits(int formatFlags);
-void glo_flags_get_rgba_bits(int formatFlags, int *rgba);
-int glo_flags_get_bytes_per_pixel(int formatFlags);
-void glo_flags_get_readpixel_type(int formatFlags, int *glFormat, int *glType);
+extern int glo_flags_get_depth_bits(int formatFlags);
+extern int glo_flags_get_stencil_bits(int formatFlags);
+extern void glo_flags_get_rgba_bits(int formatFlags, int *rgba);
+extern int glo_flags_get_bytes_per_pixel(int formatFlags);
+extern void glo_flags_get_readpixel_type(int formatFlags, int *glFormat, int *glType);
 
 /* Create a set of format flags from a null-terminated list
  * of GLX fbConfig flags. If assumeBooleans is set, items such
  * as GLX_RGBA/GLX_DOUBLEBUFFER are treated as booleans, not key-value pairs
  * (glXChooseVisual treats them as booleans, glXChooseFBConfig as key-value pairs)
  */
-int glo_flags_get_from_glx(unsigned int *fbConfig, int assumeBooleans);
+extern int glo_flags_get_from_glx(unsigned int *fbConfig, int assumeBooleans);
 
 
 /* In terms of speed, glReadPixels actually seems the best we can do.
@@ -99,5 +99,8 @@ int glo_flags_get_from_glx(unsigned int *fbConfig, int assumeBooleans);
  * GL_UNSIGNED_BYTE, but there don't appear to be any speed increase from
  * doing this on Windows at least.
  */
+
+#include <X11/Xlib.h>
+extern Display *glo_get_dpy(void);
 
 #endif /* GLOFFSCREEN_H_ */

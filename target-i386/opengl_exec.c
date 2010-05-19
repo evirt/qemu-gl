@@ -298,7 +298,7 @@ typedef struct {
     int ref;
     int fake_ctxt;
     int fake_shareList;
-    GLXContext context;
+
     GloSurface *drawable;
 
     void *vertexPointer;
@@ -1032,8 +1032,7 @@ static GLuint translate_id(GLsizei n, GLenum type, const GLvoid *list)
     }
 }
 
-void _create_context(ProcessState *process, GLXContext ctxt, int fake_ctxt,
-                     GLXContext shareList, int fake_shareList)
+void _create_context(ProcessState *process, int fake_ctxt, int fake_shareList)
 {
     process->glstates =
         qemu_realloc(process->glstates,
@@ -1041,11 +1040,10 @@ void _create_context(ProcessState *process, GLXContext ctxt, int fake_ctxt,
     process->glstates[process->nb_states] = qemu_malloc(sizeof(GLState));
     memset(process->glstates[process->nb_states], 0, sizeof(GLState));
     process->glstates[process->nb_states]->ref = 1;
-    process->glstates[process->nb_states]->context = ctxt;
     process->glstates[process->nb_states]->fake_ctxt = fake_ctxt;
     process->glstates[process->nb_states]->fake_shareList = fake_shareList;
     init_gl_state(process->glstates[process->nb_states]);
-    if (shareList && fake_shareList) {
+    if (fake_shareList) {
         int i;
 
         for (i = 0; i < process->nb_states; i++) {
@@ -1073,7 +1071,7 @@ void _create_context(ProcessState *process, GLXContext ctxt, int fake_ctxt,
 void disconnect(ProcessState *process)
 {
     int i;
-    Display *dpy = process->dpy;
+    Display *dpy = glo_get_dpy();
 
     glXMakeCurrent(dpy, 0, NULL);
 
@@ -1082,14 +1080,12 @@ void disconnect(ProcessState *process)
         GLXContext ctxt = process->association_fakecontext_glxcontext[i].value;
         glXDestroyContext(dpy, ctxt);
     }
-
     GET_EXT_PTR(void, glXDestroyPbuffer, (Display *, GLXPbuffer));
 
     for (i = 0; i < MAX_ASSOC_SIZE &&
                     process->association_fakepbuffer_pbuffer[i].key; i ++) {
         GLXPbuffer pbuffer = (GLXPbuffer)
                 process->association_fakepbuffer_pbuffer[i].value;
-
         if (!is_gl_vendor_ati(dpy))
             ptr_func_glXDestroyPbuffer(dpy, pbuffer);
     }
@@ -1145,8 +1141,9 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
             process->p.process_id = pid;
             init_gl_state(&process->default_state);
             process->current_state = &process->default_state;
-
+#if 0 //GW
             process->dpy = parent_dpy;
+#endif
             break;
         }
 
@@ -1168,7 +1165,8 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
 int do_function_call(ProcessState *process, int func_number, arg_t *args, char *ret_string)
 {
     union gl_ret_type ret;
-    Display *dpy = process->dpy;
+    Display *dpy = glo_get_dpy();
+
     Signature *signature = (Signature *) tab_opengl_calls[func_number];
     int ret_type = signature->ret_type;
 
@@ -1345,7 +1343,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                             process, fake_shareList);
             XVisualInfo *vis = get_visual_info_from_visual_id(dpy, visualid);
             GLXContext ctxt;
-
+#if 0
     while(0){
        GLXFBConfig          *fbConfigs;
        int                   numReturned;
@@ -1382,11 +1380,21 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                                        ctxt);
                 ret.i = fake_ctxt;
 
-                _create_context(process, ctxt, fake_ctxt, shareList,
-                                fake_shareList);
+                _create_context(process, fake_ctxt, fake_shareList);
             } else {
                 ret.i = 0;
             }
+#endif
+
+            // TODO GW save fbConfigs to the GLState here
+            int fake_ctxt = ++process->next_available_context_number;
+
+            set_association_fakecontext_visual(process, fake_ctxt, vis);
+            set_association_fakecontext_glxcontext(process, fake_ctxt,
+                                                   ctxt);
+            ret.i = fake_ctxt;
+
+            _create_context(process, fake_ctxt, fake_shareList);
 
             break;
         }
@@ -1394,8 +1402,10 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXCreateNewContext_func:
         {
+#if 0 //GW
             GET_EXT_PTR(GLXContext, glXCreateNewContext,
                         (Display *, GLXFBConfig, int, GLXContext, int));
+#endif
             int client_fbconfig = args[1];
 
             ret.i = 0;
@@ -1403,18 +1413,21 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
             if (fbconfig) {
                 int fake_shareList = args[3];
+#if 0 //GW
                 GLXContext shareList = get_association_fakecontext_glxcontext(
                                 process, fake_shareList);
+#endif
                 process->next_available_context_number++;
                 int fake_ctxt = process->next_available_context_number;
+#if 0 //GW
                 GLXContext ctxt = ptr_func_glXCreateNewContext(
                                 dpy, fbconfig, args[2], shareList, args[4]);
                 set_association_fakecontext_glxcontext(
                                 process, fake_ctxt, ctxt);
+#endif
                 ret.i = fake_ctxt;
 
-                _create_context(process, ctxt, fake_ctxt, shareList,
-                                fake_shareList);
+                _create_context(process, fake_ctxt, fake_shareList);
             }
             break;
         }
@@ -1462,7 +1475,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
                 for (i = 0; i < process->nb_states; i ++) {
                     if (process->glstates[i]->fake_ctxt == fake_ctxt) {
+#if 0 //GW
                         if (ctxt == process->current_state->context)
+#endif
                             process->current_state = &process->default_state;
 
                         int fake_shareList =
