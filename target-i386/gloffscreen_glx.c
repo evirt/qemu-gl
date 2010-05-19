@@ -77,7 +77,7 @@ void glo_kill(void) {
 
 /* Create a surface with given width and height, formatflags are from the
  * GLO_ constants */
-GloSurface *glo_surface_create(int width, int height, int formatFlags) {
+GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurface *shareWith) {
     GLXFBConfig          *fbConfigs;
     int                   numReturned;
     GloSurface           *surface;
@@ -160,6 +160,7 @@ void glo_surface_makecurrent(GloSurface *surface) {
 
 /* Get the contents of the given surface */
 void glo_surface_getcontents(GloSurface *surface, void *data) {
+    if (!surface) return;
 #if 1
     // 2593us/frame for 256x256 (individual readpixels)
     // 161us/frame for 256x256 (unflipped)
