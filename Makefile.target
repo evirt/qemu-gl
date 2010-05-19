@@ -51,6 +51,7 @@ libobj-$(TARGET_ALPHA) += alpha_palcode.o
 
 ifeq ($(TARGET_BASE_ARCH), i386)
 libobj-y+=helper_opengl.o opengl_exec.o mesa_mipmap.o
+libobj-y+=gloffscreen_common.o gloffscreen_glx.o gloffscreen_wgl.o
 endif
 
 # NOTE: the disassembler code is only needed for debugging

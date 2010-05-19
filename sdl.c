@@ -121,11 +121,6 @@ static void do_sdl_resize(int new_width, int new_height, int bpp)
 	fprintf(stderr, "SDL fail\n");
 	exit(1);
     }
-    if (info.subsystem == SDL_SYSWM_X11 && info.info.x11.display &&
-                    (!dpy || dpy == info.info.x11.display)) {
-        dpy = info.info.x11.display;
-        opengl_exec_set_parent_window(dpy, info.info.x11.window);
-    }
 }
 
 static void sdl_resize(DisplayState *ds)
