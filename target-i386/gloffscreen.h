@@ -65,7 +65,7 @@ extern GloSurface *glo_surface_create(int width, int height, int formatFlags, Gl
 extern void glo_surface_destroy(GloSurface *surface);
 
 /* Make the given surface current */
-extern void glo_surface_makecurrent(GloSurface *surface);
+extern int glo_surface_makecurrent(GloSurface *surface);
 
 /* Get the contents of the given surface. Note that this is top-down, not
  * bottom-up as glReadPixels would do. */
