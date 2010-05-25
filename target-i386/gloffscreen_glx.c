@@ -167,14 +167,15 @@ int glo_surface_makecurrent(GloSurface *surface) {
 }
 
 /* Get the contents of the given surface */
-void glo_surface_getcontents(GloSurface *surface, void *data) {
+void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
     if (!surface) return;
+//#define GETCONTENTS_INDIVIDUAL true
 #if 1
     // 2593us/frame for 256x256 (individual readpixels)
     // 161us/frame for 256x256 (unflipped)
     // 314us/frame for 256x256 (single readpixels + software flip)
-    int bpp = glo_flags_get_bytes_per_pixel(surface->formatFlags);
-    int rowsize = surface->width*bpp;
+//    int bpp = glo_flags_get_bytes_per_pixel(surface->formatFlags);
+//    int rowsize = surface->width*bpp;
     int glFormat, glType;
     glo_flags_get_readpixel_type(surface->formatFlags, &glFormat, &glType);
 #ifdef GETCONTENTS_INDIVIDUAL
@@ -182,24 +183,30 @@ void glo_surface_getcontents(GloSurface *surface, void *data) {
     int irow;
     for(irow = surface->height-1 ; irow >= 0 ; irow--) {
         glReadPixels(0, irow, surface->width, 1, glFormat, glType, b);
-        b += rowsize;
+        b += stride;
     }
 #else
     // unflipped
     GLubyte *b = (GLubyte *)data;
-    GLubyte *c = &((GLubyte *)data)[rowsize*(surface->height-1)];
-    GLubyte *tmp = (GLubyte*)malloc(rowsize);
+    GLubyte *c = &((GLubyte *)data)[stride*(surface->height-1)];
+    GLubyte *tmp = (GLubyte*)malloc(stride);
     int irow;
     //printf("DP 0x%08X 0x%08X\n", glFormat, glType);
+    glPixelStorei(GL_PACK_ALIGNMENT, 4);//FIXMEIM - calculate ?
     glReadPixels(0, 0, surface->width, surface->height, glFormat, glType, data);
     for(irow = 0; irow < surface->height/2; irow++) {
-        memcpy(tmp, b, rowsize);
-        memcpy(b, c, rowsize);
-        memcpy(c, tmp, rowsize);
-        b += rowsize;
-        c -= rowsize;
+        memcpy(tmp, b, stride);
+        memcpy(b, c, stride);
+        memcpy(c, tmp, stride);
+        b += stride;
+        c -= stride;
     }
-    free(tmp);
+//    free(tmp);
+//    {
+//        FILE *d = fopen("dbg.rgb", "wb");
+//	fwrite(b, surface->width*4, surface->height, d);
+//	fclose(d);
+//    }
 #endif
 #else
    // glXSwapBuffers(glo.dpy, surface->glxPixmap);

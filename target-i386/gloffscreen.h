@@ -69,7 +69,7 @@ extern int glo_surface_makecurrent(GloSurface *surface);
 
 /* Get the contents of the given surface. Note that this is top-down, not
  * bottom-up as glReadPixels would do. */
-extern void glo_surface_getcontents(GloSurface *surface, void *data);
+extern void glo_surface_getcontents(GloSurface *surface, int stride, void *data);
 
 /* Return the width and height of the given surface */
 extern void glo_surface_get_size(GloSurface *surface, int *width, int *height);
