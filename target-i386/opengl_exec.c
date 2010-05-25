@@ -1562,7 +1562,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             if (client_drawable == 0 && fake_ctxt == 0) {
                 /* Release context */
                 process->current_state = &process->default_state;
-                //FIXMEIM - glxMakeCurrent(foo, NULL, 0) here?
+
+                glo_surface_makecurrent(0);
             } else { /* Lookup GLState struct for this context */
                 glstate = get_glstate_for_fake_ctxt(process, fake_ctxt);
                 if (!glstate) {
@@ -1571,37 +1572,37 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                      //FIXMEIM - the order of lookup seems wrong here. might be faster to lookup in a different order.
                     /* If the host drawable is a pbuffer, lookup the associated
                        context */
-#if 0 //GW
-                    glstate->drawable = (GLXDrawable)
-                                        get_association_fakepbuffer_pbuffer(
-                                                process, client_drawable);
-#endif
-                    if(!glstate->drawable) {
+                    GloSurface *surface = get_association_clientdrawable_serverdrawable(
+                                                            process, client_drawable);
+                    if (!surface) {
+                       /* else, create an ordinary drawable */
+                       XVisualInfo *vis = get_association_fakecontext_visual(
+                                       process, fake_ctxt);
+
+                       if (!vis)
+                           vis = get_default_visual(dpy);
+
+                       glstate->drawable = surface = alloc_surface(dpy, vis, glstate, 0, 800, 500);
+
+                       fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
+
+                       set_association_clientdrawable_serverdrawable(process,
+                                       client_drawable, glstate->drawable);
+
+                   }
+
+                   if(glstate->drawable != surface) {
                         /* else try to lookup ordinary drawable */
-                        glstate->drawable = get_association_clientdrawable_serverdrawable(
-                                        process, client_drawable);
-                        if (!glstate->drawable) {
-                            /* else, create an ordinary drawable */
-                            XVisualInfo *vis = get_association_fakecontext_visual(
-                                            process, fake_ctxt);
+                        glstate->drawable = surface;
 
-                            if (!vis)
-                                vis = get_default_visual(dpy);
-
-                            glstate->drawable = alloc_surface(dpy, vis, glstate, 0, 800, 500);
-
-                            fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
-
-                            set_association_clientdrawable_serverdrawable(process,
-                                            client_drawable, glstate->drawable);
-
-                        }
                     }
 
                     if(!glstate->drawable){
                         fprintf(stderr, "No drawable!\n");
                         exit(1);
                     }
+
+                    glo_surface_makecurrent(glstate->drawable);
 
                     process->current_state = glstate;
 
