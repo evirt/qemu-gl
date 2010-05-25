@@ -122,9 +122,6 @@ void glo_init(void) {
     }
     wglMakeCurrent(glo.hDC, glo.hContext);
 
-    // FIXME GW
-    // Need to share lists AND copy state
-
     // load in the extensions we need
     //const char	*ext = wglGetExtensionsStringARB(hdc);
     //"WGL_ARB_pixel_format" "WGL_ARB_pbuffer"
@@ -218,6 +215,12 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
     if( !surface->hPBuffer ) {
       printf( "Couldn't create the PBuffer\n" );
       exit( EXIT_FAILURE );
+    }
+
+    if (shareWith) {
+      // Need to share lists AND copy state
+      wglShareLists(shareWith->hRC, surface->hRC);
+      wglCopyContext(shareWith->hRC, surface->hRC, GL_ALL_ATTRIB_BITS);
     }
 
 
