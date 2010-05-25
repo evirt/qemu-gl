@@ -132,8 +132,6 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
     ** with the created X window */
     surface->glxPixmap = glXCreatePixmap( glo.dpy, fbConfigs[0], surface->xPixmap, NULL );
 
-    glo_surface_makecurrent(surface);
-
     return surface;
 }
 
@@ -146,16 +144,19 @@ void glo_surface_destroy(GloSurface *surface) {
 }
 
 /* Make the given surface current */
-void glo_surface_makecurrent(GloSurface *surface) {
+int glo_surface_makecurrent(GloSurface *surface) {
+    int ret;
+
     if (!glo_inited)
       glo_init();
 
     if (surface) {
-      glXMakeContextCurrent( glo.dpy,
-              surface->glxPixmap, surface->glxPixmap, surface->context );
+      ret = glXMakeCurrent(glo.dpy, surface->glxPixmap, surface->context);
     } else {
-      glXMakeCurrent(glo.dpy, 0, NULL);
+      ret = glXMakeCurrent(glo.dpy, 0, NULL);
     }
+
+    return ret;
 }
 
 /* Get the contents of the given surface */

@@ -1558,6 +1558,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             if (client_drawable == 0 && fake_ctxt == 0) {
                 /* Release context */
                 process->current_state = &process->default_state;
+                //FIXMEIM - glxMakeCurrent(foo, NULL, 0) here?
             } else { /* Lookup GLState struct for this context */
                 glstate = get_glstate_for_fake_ctxt(process, fake_ctxt);
                 if (!glstate) {
@@ -1600,7 +1601,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
                     process->current_state = glstate;
 
-                    ret.i = 1;//GW glXMakeCurrent(dpy, glstate->drawable, ctxt);
+                    ret.i = glo_surface_makecurrent(glstate->drawable);
                 }
             }
             break;
