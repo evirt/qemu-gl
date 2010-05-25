@@ -126,11 +126,14 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
                                       width, height, bufferDepth);
 
     if (shareWith)
-          shareLists = shareWith->context;
+      shareLists = shareWith->context;
 
     /* Create a GLX context for OpenGL rendering */
     surface->context = glXCreateNewContext( glo.dpy, fbConfigs[0],
                                             GLX_RGBA_TYPE, shareLists, True );
+
+    if (shareLists)
+      glXCopyContext(glo.dpy, shareLists, surface->context, GL_ALL_ATTRIB_BITS);
 
     /* Create a GLX window to associate the frame buffer configuration
     ** with the created X window */
