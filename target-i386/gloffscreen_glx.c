@@ -124,6 +124,10 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
     surface->formatFlags = formatFlags;
     surface->xPixmap = XCreatePixmap( glo.dpy, DefaultRootWindow(glo.dpy),
                                       width, height, bufferDepth);
+    if (!surface->xPixmap) {
+      printf( "XCreatePixmap failed\n" );
+      exit( EXIT_FAILURE );
+    }
 
     if (shareWith)
       shareLists = shareWith->context;
@@ -131,6 +135,10 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
     /* Create a GLX context for OpenGL rendering */
     surface->context = glXCreateNewContext( glo.dpy, fbConfigs[0],
                                             GLX_RGBA_TYPE, shareLists, True );
+    if (!surface->context) {
+      printf( "glXCreateNewContext failed\n" );
+      exit( EXIT_FAILURE );
+    }
 
     if (shareLists)
       glXCopyContext(glo.dpy, shareLists, surface->context, GL_ALL_ATTRIB_BITS);
@@ -138,6 +146,10 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
     /* Create a GLX window to associate the frame buffer configuration
     ** with the created X window */
     surface->glxPixmap = glXCreatePixmap( glo.dpy, fbConfigs[0], surface->xPixmap, NULL );
+    if (!surface->glxPixmap) {
+      printf( "glXCreatePixmap failed\n" );
+      exit( EXIT_FAILURE );
+    }
 
     return surface;
 }
