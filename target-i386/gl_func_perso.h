@@ -29,6 +29,7 @@ MAGIC_MACRO(_serialized_calls),
 MAGIC_MACRO(_moveResizeWindow),
 MAGIC_MACRO(_changeWindowState),
 MAGIC_MACRO(_send_cursor),
+MAGIC_MACRO(_get_imagedata),
 
 /* When you add a glX call here, you HAVE TO update IS_GLX_CALL */
 MAGIC_MACRO(glXChooseVisual),

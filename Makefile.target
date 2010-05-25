@@ -80,7 +80,7 @@ op_helper.o cpu-exec.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 
-GL_CFLAGS := -Wall -g -O0 -fno-strict-aliasing
+GL_CFLAGS := -Wall -g -O2 -fno-strict-aliasing
 parse_gl_h: parse_gl_h.c
 	$(HOST_CC) -g -o $@ $<
 server_stub.c: parse_gl_h
@@ -326,7 +326,7 @@ endif # CONFIG_SOFTMMU
 obj-$(CONFIG_GDBSTUB_XML) += gdbstub-xml.o
 
 $(QEMU_PROG): $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y)
-	$(call LINK,$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y)) -lGL -lGLU
+	$(call LINK,$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y)) -lGL -lGLU -lXcomposite
 
 
 gdbstub-xml.c: $(TARGET_XML_FILES) $(SRC_PATH)/feature_to_c.sh

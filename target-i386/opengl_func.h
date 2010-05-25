@@ -308,6 +308,8 @@ static const int _send_cursor_signature[] =
     TYPE_ARRAY_INT
 };
 
+static const int _get_imagedata_signature[] = {TYPE_NONE, 1, 2, TYPE_INT, TYPE_OUT_ARRAY_VOID};
+
 /* XVisualInfo* glXChooseVisual( Display *dpy, int screen, int *attribList ) */
 static const int glXChooseVisual_signature[] =
     { TYPE_INT, 0, 3, TYPE_IN_IGNORED_POINTER, TYPE_INT, TYPE_ARRAY_INT };

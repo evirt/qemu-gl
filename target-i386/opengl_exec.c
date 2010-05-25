@@ -31,6 +31,8 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
+#include <X11/extensions/Xcomposite.h>
+
 #define GL_GLEXT_PROTOTYPES
 #define GLX_GLXEXT_PROTOTYPES
 
@@ -168,9 +170,16 @@ static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
         CWBackPixel | CWBorderPixel | CWColormap | CWEventMask |
         CWOverrideRedirect | CWSaveUnder;
 
-    if (qemu_parent_window)
-        win = XCreateWindow(dpy, qemu_parent_window, 0, 0, width, height, 0,
+    assert (qemu_parent_window);
+
+    win = XCreateWindow(dpy, qemu_parent_window, 0, 0, width, height, 0,
                         vis->depth, InputOutput, vis->visual, mask, &attr);
+
+    /*
+     * Redirect host created window to offscreen. Instead of being shown directly in QEMU window, the gl window image
+     * will be copied back to client X window and shown by X server in client OS.
+     */
+	XCompositeRedirectWindow (dpy, win, CompositeRedirectManual);
 
     /* set hints and properties */
     {
@@ -315,7 +324,7 @@ typedef struct {
     Assoc association_fakepbuffer_pbuffer[MAX_ASSOC_SIZE];
     Assoc association_clientdrawable_serverdrawable[MAX_ASSOC_SIZE];
     Assoc association_fakecontext_visual[MAX_ASSOC_SIZE];
-
+    Assoc association_serverdrawable_redirect[MAX_ASSOC_SIZE];
     Display *dpy;
 
     int primitive;
@@ -945,7 +954,7 @@ void do_disconnect(ProcessState *process)
     if(!process->p.wordsize)
         fprintf(stderr, "Likely died prior to init: pid %d\n", process->p.process_id);
     else 
-        fprintf("disconnect GL process: %d\n", process->p.process_id);
+        fprintf(stderr, "disconnect GL process: %d\n", process->p.process_id);
 
     glXMakeCurrent(dpy, 0, NULL);
 
@@ -1066,6 +1075,39 @@ ProcessStruct *do_context_switch(pid_t pid, int switch_gl_context)
     }
 
     return (ProcessStruct *)process; // Cast is ok due to struct defn.
+}
+
+static void GetDrawableImage (ProcessState *process, Display *dpy, GLXDrawable drawable, void * buf)
+{
+    XWindowAttributes wattr;
+    XGetWindowAttributes(dpy, drawable, &wattr);
+    int width = wattr.width;
+    int height = wattr.height;
+
+#ifdef TUNE_PERFORMANCE
+    static struct timeval current_time;
+    static struct timeval last_time;
+    gettimeofday (&current_time, NULL);
+    // compute the interval time.
+    int diff_time = (current_time.tv_sec - last_time.tv_sec) * 1000 + (current_time.tv_usec - last_time.tv_usec) / 1000;
+    fprintf (stderr, "Waiting %d mseconds to do GetImage again!\n", diff_time);
+#endif
+
+    XImage *img = XGetImage(dpy, drawable, 0, 0, width, height, 0xffffffff, ZPixmap);
+
+#ifdef TUNE_PERFORMANCE
+    gettimeofday (&last_time, NULL);
+    // compute the interval time.
+    diff_time = (last_time.tv_sec - current_time.tv_sec) * 1000 + (last_time.tv_usec - current_time.tv_usec) / 1000;
+    fprintf (stderr, "---XGet image used %d mseconds!\n", diff_time);
+
+    fprintf (stderr, "Copy image: width=%d\theight=%d\n", width, height);
+#endif
+
+    if (img) {
+        memcpy (buf, img->data, 4 * width * height);
+		XDestroyImage (img);
+    }
 }
 
 int do_function_call(ProcessState *process, int func_number, arg_t *args, char *ret_string)
@@ -1238,6 +1280,22 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
             break;
         }
+	case _get_imagedata_func:
+	{
+            ClientGLXDrawable client_drawable = to_drawable(args[0]);
+
+            if (display_function_call)
+                fprintf(stderr, "client_drawable=%p\n",
+                        (void *) client_drawable);
+
+            GLXDrawable drawable =
+                    get_association_clientdrawable_serverdrawable(
+                                    process, client_drawable);
+            if (drawable) {
+		GetDrawableImage (process, dpy, drawable, (void *)args[1]);
+	    }
+	    break;
+	}
 
     case glXWaitGL_func:
         {
