@@ -82,6 +82,7 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
     int                   numReturned;
     GloSurface           *surface;
     int                   rgbaBits[4];
+    GLXContext            shareLists = NULL;
     int bufferDepth;
     int bufferAttributes[] = {
         GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
@@ -124,9 +125,12 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
     surface->xPixmap = XCreatePixmap( glo.dpy, DefaultRootWindow(glo.dpy),
                                       width, height, bufferDepth);
 
+    if (shareWith)
+          shareLists = shareWith->context;
+
     /* Create a GLX context for OpenGL rendering */
     surface->context = glXCreateNewContext( glo.dpy, fbConfigs[0],
-                                            GLX_RGBA_TYPE, NULL, True );
+                                            GLX_RGBA_TYPE, shareLists, True );
 
     /* Create a GLX window to associate the frame buffer configuration
     ** with the created X window */
