@@ -122,6 +122,9 @@ void glo_init(void) {
     }
     wglMakeCurrent(glo.hDC, glo.hContext);
 
+    // FIXME GW
+    // Need to share lists AND copy state
+
     // load in the extensions we need
     //const char	*ext = wglGetExtensionsStringARB(hdc);
     //"WGL_ARB_pixel_format" "WGL_ARB_pbuffer"
