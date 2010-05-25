@@ -143,6 +143,9 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
     if (shareLists)
       glXCopyContext(glo.dpy, shareLists, surface->context, GL_ALL_ATTRIB_BITS);
 
+    if (shareLists)
+      glXCopyContext(glo.dpy, shareLists, surface->context, GL_ALL_ATTRIB_BITS);
+
     /* Create a GLX window to associate the frame buffer configuration
     ** with the created X window */
     surface->glxPixmap = glXCreatePixmap( glo.dpy, fbConfigs[0], surface->xPixmap, NULL );
