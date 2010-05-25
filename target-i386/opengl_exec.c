@@ -471,7 +471,7 @@ void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *pr
         return;
     }
 
-    glo_surface_getcontents(drawable, buffer);
+    glo_surface_getcontents(drawable, stride, buffer);
 }
 
 
