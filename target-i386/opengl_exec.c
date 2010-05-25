@@ -398,7 +398,7 @@ GloSurface *alloc_surface(Display *dpy, XVisualInfo *vis, GLState *glstate, GloS
     int format = GLO_FF_DEFAULT & ~GLO_FF_BITS_MASK;
     if (vis->depth == 16)
       format |= GLO_FF_BITS_16;
-    else if (vis->depth == 16)
+    else if (vis->depth == 24)
       format |= GLO_FF_BITS_24;
     else
       format |= GLO_FF_BITS_32;
