@@ -417,11 +417,11 @@ GloSurface *get_association_clientdrawable_serverdrawable(
 void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *process, int w, int h, int stride, char *buffer)
 {
     int irow;
-    fprintf(stderr, "give_update to: %08x\n", drawable);
-    fprintf(stderr, "dim %d x %d\n", w, h);
-    fprintf(stderr, "buf %08x\n", buffer);
+//    fprintf(stderr, "give_update to: %08x\n", drawable);
+//    fprintf(stderr, "dim %d x %d\n", w, h);
+//    fprintf(stderr, "buf %08x\n", buffer);
 
-    // if resizd, reallocate. else...
+    // if resized, reallocate. else...
     if(!buffer) {
         int i;
         XVisualInfo *vis;
@@ -454,14 +454,18 @@ void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *pr
             client_drawable);
 
         GloSurface *surface = alloc_surface(dpy, vis, glstate, oldSurface, w, h); // Make current?
-        if (glstate->drawable != oldSurface)
+        if (glstate->drawable != oldSurface) {
           fprintf(stderr, "glstate->drawable != oldSurface - not MadeCurrent??\n");
+          exit(1);
+        }
         glstate->drawable = surface;
 
         fprintf(stderr, "Replace: %08x\n", glstate->drawable);
-        if (oldSurface) glo_surface_destroy(oldSurface);
         set_association_clientdrawable_serverdrawable(process,
                                             client_drawable, glstate->drawable);
+
+        if (oldSurface)
+            glo_surface_destroy(oldSurface);
 
         glo_surface_makecurrent(glstate->drawable);
         return;
