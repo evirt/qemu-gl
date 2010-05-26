@@ -382,7 +382,6 @@ typedef struct {
 
     Assoc association_fakepbuffer_pbuffer[MAX_ASSOC_SIZE];
     Assoc association_clientdrawable_serverdrawable[MAX_ASSOC_SIZE];
-    Assoc association_fakecontext_visual[MAX_ASSOC_SIZE];
 
     int primitive;
     int bufsize;
@@ -392,8 +391,6 @@ typedef struct {
 
 static ProcessState processes[MAX_HANDLED_PROCESS];
 
-XVisualInfo *get_association_fakecontext_visual(
-                ProcessState *process, int fakecontext);
 typedef void *ClientGLXDrawable;
 ClientGLXDrawable get_association_serverdrawable_clientdrawable(
                 ProcessState *process, GloSurface *serverdrawable);
@@ -415,7 +412,6 @@ void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *pr
     // if resized, reallocate. else...
     if(!buffer ) {
         int i;
-        XVisualInfo *vis;
         ClientGLXDrawable client_drawable = get_association_serverdrawable_clientdrawable(
                 process, drawable);
 
@@ -433,11 +429,6 @@ void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *pr
 
 	if(!glstate)
 	    return;
-
-        vis = get_association_fakecontext_visual(process, glstate->fake_ctxt);
-
-        if (!vis)
-            vis = get_default_visual(dpy);
 
         fprintf(stderr, "re");
 
@@ -552,42 +543,6 @@ void unset_association_fakecontext_glxcontext(
 
 /* ---- */
 
-XVisualInfo *get_association_fakecontext_visual(
-                ProcessState *process, int fakecontext)
-{
-    int i;
-
-    for (i = 0;
-         i < MAX_ASSOC_SIZE && process->association_fakecontext_visual[i].key;
-         i++)
-        if ((int) (long) process->association_fakecontext_visual[i].key ==
-                        fakecontext)
-            return process->association_fakecontext_visual[i].value;
-
-    return NULL;
-}
-
-void set_association_fakecontext_visual(ProcessState *process,
-                int fakecontext, XVisualInfo *visual)
-{
-    int i;
-
-    for (i = 0;
-         i < MAX_ASSOC_SIZE && process->association_fakecontext_visual[i].key;
-         i++)
-        if ((int) (long) process->association_fakecontext_visual[i].key ==
-                        fakecontext)
-            break;
-
-    if (i < MAX_ASSOC_SIZE) {
-        process->association_fakecontext_visual[i].key =
-                (void *) (long) fakecontext;
-        process->association_fakecontext_visual[i].value = (void *) visual;
-    } else
-        fprintf(stderr, "MAX_ASSOC_SIZE reached\n");
-}
-
-/* ---- */
 
 GLXPbuffer get_association_fakepbuffer_pbuffer(
                 ProcessState *process, ClientGLXDrawable fakepbuffer)
@@ -1357,7 +1312,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             // TODO GW save fbConfigs to the GLState here
             int fake_ctxt = ++process->next_available_context_number;
 
-            set_association_fakecontext_visual(process, fake_ctxt, vis);
             ret.i = fake_ctxt;
 
             // Work out format flags from visual
@@ -1537,12 +1491,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                                             process, client_drawable);
                     if (!surface) {
                        /* else, create an ordinary drawable */
-                       XVisualInfo *vis = get_association_fakecontext_visual(
-                                       process, fake_ctxt);
-
-                       if (!vis)
-                           vis = get_default_visual(dpy);
-
                        glstate->drawable = surface = glo_surface_create(800,500, glstate->context);
 
                        fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
