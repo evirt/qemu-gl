@@ -40,13 +40,19 @@ struct GloMain {
 struct GloMain glo;
 int glo_inited = 0;
 
+struct _GloContext {
+  GLuint                formatFlags;
+
+  GLXFBConfig           fbConfig;
+  GLXContext            context;
+};
+
 struct _GloSurface {
   GLuint                width;
   GLuint                height;
-  GLuint                formatFlags;
 
+  GloContext           *context;
   Pixmap                xPixmap;
-  GLXContext            context;
   GLXPixmap             glxPixmap;
 };
 
@@ -75,80 +81,98 @@ void glo_kill(void) {
 
 /* ------------------------------------------------------------------------ */
 
+/* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
+GloContext *glo_context_create(int formatFlags, GloSurface *shareLists) {
+  if (!glo_inited)
+    glo_init();
+
+  GLXFBConfig          *fbConfigs;
+  int                   numReturned;
+  GloContext           *context;
+  int                   rgbaBits[4];
+  int                   bufferAttributes[] = {
+      GLX_DRAWABLE_TYPE, GLX_PIXMAP_BIT,
+      GLX_RENDER_TYPE,   GLX_RGBA_BIT,
+      GLX_RED_SIZE,      8,
+      GLX_GREEN_SIZE,    8,
+      GLX_BLUE_SIZE,     8,
+      GLX_ALPHA_SIZE,    8,
+      GLX_DEPTH_SIZE,    0,
+      GLX_STENCIL_SIZE,  0,
+      //GLX_DOUBLEBUFFER,  1,
+      None
+  };
+
+  if (!glo_inited)
+    glo_init();
+  // set up the surface format from the flags we were given
+  glo_flags_get_rgba_bits(formatFlags, rgbaBits);
+  bufferAttributes[5]  = rgbaBits[0];
+  bufferAttributes[7]  = rgbaBits[1];
+  bufferAttributes[9]  = rgbaBits[2];
+  bufferAttributes[11] = rgbaBits[3];
+  bufferAttributes[13] = glo_flags_get_depth_bits(formatFlags);
+  bufferAttributes[15] = glo_flags_get_stencil_bits(formatFlags);
+
+  //printf("Got R%d, G%d, B%d, A%d\n", rgbaBits[0], rgbaBits[1], rgbaBits[2], rgbaBits[3]);
+
+  fbConfigs = glXChooseFBConfig( glo.dpy, DefaultScreen(glo.dpy),
+                                 bufferAttributes, &numReturned );
+  if (numReturned==0) {
+      printf( "No matching configs found.\n" );
+      exit( EXIT_FAILURE );
+  }
+  context = (GloContext*)malloc(sizeof(GloContext));
+  memset(context, 0, sizeof(GloContext));
+  context->formatFlags = formatFlags;
+  context->fbConfig = fbConfigs[0];
+
+  /* Create a GLX context for OpenGL rendering */
+  context->context = glXCreateNewContext( glo.dpy, context->fbConfig,
+                                          GLX_RGBA_TYPE,
+                                          shareLists ? shareLists->context->context : NULL,
+                                          True );
+  if (!context->context) {
+    printf( "glXCreateNewContext failed\n" );
+    exit( EXIT_FAILURE );
+  }
+
+  return context;
+}
+
+/* Destroy a previouslu created OpenGL context */
+void glo_context_destroy(GloContext *context) {
+  if (!context) return;
+  // TODO: check for GloSurfaces using this?
+  glXDestroyContext( glo.dpy, context->context);
+  free(context);
+}
+
+/* ------------------------------------------------------------------------ */
+
 /* Create a surface with given width and height, formatflags are from the
  * GLO_ constants */
-GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurface *shareWith) {
-    GLXFBConfig          *fbConfigs;
-    int                   numReturned;
+GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     GloSurface           *surface;
-    int                   rgbaBits[4];
-    GLXContext            shareLists = NULL;
-    int bufferDepth;
-    int bufferAttributes[] = {
-        GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
-        GLX_RENDER_TYPE,   GLX_RGBA_BIT,
-        GLX_RED_SIZE,      8,
-        GLX_GREEN_SIZE,    8,
-        GLX_BLUE_SIZE,     8,
-        GLX_ALPHA_SIZE,    8,
-        GLX_DEPTH_SIZE,    0,
-        GLX_STENCIL_SIZE,  0,
-        //GLX_DOUBLEBUFFER,  1,
-        None
-    };
 
-    if (!glo_inited)
-      glo_init();
-    // set up the surface format from the flags we were given
-    glo_flags_get_rgba_bits(formatFlags, rgbaBits);
-    bufferAttributes[5]  = rgbaBits[0];
-    bufferAttributes[7]  = rgbaBits[1];
-    bufferAttributes[9]  = rgbaBits[2];
-    bufferAttributes[11] = rgbaBits[3];
-    bufferDepth = rgbaBits[0]+rgbaBits[1]+rgbaBits[2]+rgbaBits[3];
-    bufferAttributes[13] = glo_flags_get_depth_bits(formatFlags);
-    bufferAttributes[15] = glo_flags_get_stencil_bits(formatFlags);
+    if (!context) return 0;
 
-    printf("Got R%d, G%d, B%d, A%d\n", rgbaBits[0], rgbaBits[1], rgbaBits[2], rgbaBits[3]);
-
-    fbConfigs = glXChooseFBConfig( glo.dpy, DefaultScreen(glo.dpy),
-                                   bufferAttributes, &numReturned );
-    if (numReturned==0) {
-        printf( "No matching configs found.\n" );
-        exit( EXIT_FAILURE );
-    }
     surface = (GloSurface*)malloc(sizeof(GloSurface));
     memset(surface, 0, sizeof(GloSurface));
     surface->width = width;
     surface->height = height;
-    surface->formatFlags = formatFlags;
+    surface->context = context;
     surface->xPixmap = XCreatePixmap( glo.dpy, DefaultRootWindow(glo.dpy),
-                                      width, height, bufferDepth);
+                                      width, height,
+                                      glo_flags_get_bytes_per_pixel(context->formatFlags)*8);
     if (!surface->xPixmap) {
       printf( "XCreatePixmap failed\n" );
       exit( EXIT_FAILURE );
     }
 
-    if (shareWith)
-      shareLists = shareWith->context;
-
-    /* Create a GLX context for OpenGL rendering */
-    surface->context = glXCreateNewContext( glo.dpy, fbConfigs[0],
-                                            GLX_RGBA_TYPE, shareLists, True );
-    if (!surface->context) {
-      printf( "glXCreateNewContext failed\n" );
-      exit( EXIT_FAILURE );
-    }
-
-    if (shareLists)
-      glXCopyContext(glo.dpy, shareLists, surface->context, GL_ALL_ATTRIB_BITS);
-
-    if (shareLists)
-      glXCopyContext(glo.dpy, shareLists, surface->context, GL_ALL_ATTRIB_BITS);
-
     /* Create a GLX window to associate the frame buffer configuration
     ** with the created X window */
-    surface->glxPixmap = glXCreatePixmap( glo.dpy, fbConfigs[0], surface->xPixmap, NULL );
+    surface->glxPixmap = glXCreatePixmap( glo.dpy, context->fbConfig, surface->xPixmap, NULL );
     if (!surface->glxPixmap) {
       printf( "glXCreatePixmap failed\n" );
       exit( EXIT_FAILURE );
@@ -161,7 +185,6 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
 void glo_surface_destroy(GloSurface *surface) {
     glXDestroyPixmap( glo.dpy, surface->glxPixmap);
     XFreePixmap( glo.dpy, surface->xPixmap);
-    glXDestroyContext( glo.dpy, surface->context);
     free(surface);
 }
 
@@ -173,7 +196,7 @@ int glo_surface_makecurrent(GloSurface *surface) {
       glo_init();
 
     if (surface) {
-      ret = glXMakeCurrent(glo.dpy, surface->glxPixmap, surface->context);
+      ret = glXMakeCurrent(glo.dpy, surface->glxPixmap, surface->context->context);
     } else {
       ret = glXMakeCurrent(glo.dpy, 0, NULL);
     }
@@ -189,10 +212,10 @@ void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
     // 2593us/frame for 256x256 (individual readpixels)
     // 161us/frame for 256x256 (unflipped)
     // 314us/frame for 256x256 (single readpixels + software flip)
-//    int bpp = glo_flags_get_bytes_per_pixel(surface->formatFlags);
+//    int bpp = glo_flags_get_bytes_per_pixel(surface->context->formatFlags);
 //    int rowsize = surface->width*bpp;
     int glFormat, glType;
-    glo_flags_get_readpixel_type(surface->formatFlags, &glFormat, &glType);
+    glo_flags_get_readpixel_type(surface->context->formatFlags, &glFormat, &glType);
 #ifdef GETCONTENTS_INDIVIDUAL
     GLubyte *b = (GLubyte *)data;
     int irow;
@@ -207,7 +230,7 @@ void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
     GLubyte *tmp = (GLubyte*)malloc(stride);
     int irow;
     //printf("DP 0x%08X 0x%08X\n", glFormat, glType);
-    glPixelStorei(GL_PACK_ALIGNMENT, 4);//FIXMEIM - calculate ?
+    //glPixelStorei(GL_PACK_ALIGNMENT, 4);//FIXMEIM - calculate ?
     glReadPixels(0, 0, surface->width, surface->height, glFormat, glType, data);
     for(irow = 0; irow < surface->height/2; irow++) {
         memcpy(tmp, b, stride);
@@ -228,7 +251,7 @@ void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
     XImage *img =
         XGetImage(glo.dpy, surface->xPixmap, 0, 0, surface->width, surface->height, AllPlanes, ZPixmap);
     if (img) {
-      int bpp = glo_flags_get_bytes_per_pixel(surface->formatFlags);
+      int bpp = glo_flags_get_bytes_per_pixel(surface->context->formatFlags);
       memcpy(data, img->data, bpp*surface->width*surface->height);
       printf("BPL %d, bpp %d, depth %d 0x%08X 0x%08X 0x%08X\n", img->bytes_per_line, img->bits_per_pixel, img->depth, img->red_mask, img->green_mask, img->blue_mask);
       img->f.destroy_image(img);

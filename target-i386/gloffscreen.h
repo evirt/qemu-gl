@@ -26,6 +26,9 @@
 #ifndef GLOFFSCREEN_H_
 #define GLOFFSCREEN_H_
 
+/* Used to hold data for the OpenGL context */
+struct _GloContext;
+typedef struct _GloContext GloContext;
 /* Used to hold data for an offscreen surface. */
 struct _GloSurface;
 typedef struct _GloSurface GloSurface;
@@ -57,9 +60,14 @@ extern void glo_init(void);
 /* Uninitialise gloffscreen */
 extern void glo_kill(void);
 
-/* Create a surface with given width and height, formatflags are from the
- * GLO_ constants */
-extern GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurface *shareWith);
+/* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
+extern GloContext *glo_context_create(int formatFlags, GloSurface *shareLists);
+
+/* Destroy a previouslu created OpenGL context */
+extern void glo_context_destroy(GloContext *context);
+
+/* Create a surface with given width and height, */
+extern GloSurface *glo_surface_create(int width, int height, GloContext *context);
 
 /* Destroy the given surface */
 extern void glo_surface_destroy(GloSurface *surface);

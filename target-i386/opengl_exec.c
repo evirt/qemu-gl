@@ -299,8 +299,8 @@ typedef struct {
     int ref;
     int fake_ctxt;
     int fake_shareList;
-    int formatFlags; // format flags for gloffscreen (created from fbconfig etc when config created)
 
+    GloContext *context; // context (owned by this)
     GloSurface *drawable; // current drawable set with MakeCurrent (*not* owned by this but by the assoc)
 
     void *vertexPointer;
@@ -392,20 +392,6 @@ typedef struct {
 
 static ProcessState processes[MAX_HANDLED_PROCESS];
 
-
-GloSurface *alloc_surface(Display *dpy, XVisualInfo *vis, GLState *glstate, GloSurface *shareWith, int w, int h) {
-    fprintf(stderr, "alloc_surface %d x %d\n", w, h);
-    int format = GLO_FF_DEFAULT & ~GLO_FF_BITS_MASK;
-    if (vis->depth == 16)
-      format |= GLO_FF_BITS_16;
-    else if (vis->depth == 24)
-      format |= GLO_FF_BITS_24;
-    else
-      format |= GLO_FF_BITS_32;
-
-    return glo_surface_create(w, h, format, shareWith);
-}
-
 XVisualInfo *get_association_fakecontext_visual(
                 ProcessState *process, int fakecontext);
 typedef void *ClientGLXDrawable;
@@ -416,13 +402,18 @@ GloSurface *get_association_clientdrawable_serverdrawable(
 
 void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *process, int w, int h, int stride, char *buffer)
 {
-    int irow;
+    int irow, dw, dh;
 //    fprintf(stderr, "give_update to: %08x\n", drawable);
-//    fprintf(stderr, "dim %d x %d\n", w, h);
-//    fprintf(stderr, "buf %08x\n", buffer);
+
+    glo_surface_get_size(drawable, &dw, &dh);
+    fprintf(stderr, "dim %d x %d\n", w, h);
+    fprintf(stderr, "buf dim %d x %d\n", dw, dh);
+    fprintf(stderr, "buf %08x, stride %d\n", buffer, stride);
+
+
 
     // if resized, reallocate. else...
-    if(!buffer) {
+    if(!buffer ) {
         int i;
         XVisualInfo *vis;
         ClientGLXDrawable client_drawable = get_association_serverdrawable_clientdrawable(
@@ -453,7 +444,7 @@ void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *pr
         GloSurface *oldSurface = get_association_clientdrawable_serverdrawable(process,
             client_drawable);
 
-        GloSurface *surface = alloc_surface(dpy, vis, glstate, oldSurface, w, h); // Make current?
+        GloSurface *surface = glo_surface_create(w, h, glstate->context);
         if (glstate->drawable != oldSurface) {
           fprintf(stderr, "glstate->drawable != oldSurface - not MadeCurrent??\n");
           exit(1);
@@ -949,6 +940,9 @@ static void destroy_gl_state(GLState *state)
 {
     int i;
 
+    if (state->context)
+      glo_context_destroy(state->context);
+
     if (state->vertexPointer)
         qemu_free(state->vertexPointer);
     if (state->normalPointer)
@@ -1357,51 +1351,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 fprintf(stderr, "visualid=%d, fake_shareList=%d\n", visualid,
                         fake_shareList);
 
-            GLXContext shareList = get_glstate_for_fake_ctxt(process, fake_shareList);
+            GLState *shareListState = get_glstate_for_fake_ctxt(process, fake_shareList);
             XVisualInfo *vis = get_visual_info_from_visual_id(dpy, visualid);
-            GLXContext ctxt;
-#if 0
-    while(0){
-       GLXFBConfig          *fbConfigs;
-       int                   numReturned;
-
-       fbConfigs = glXChooseFBConfig( dpy, DefaultScreen(dpy),
-                                   singleBufferAttributess, &numReturned );
-
-       if (numReturned==0) {
-           printf( "No matching configs found.\n" );
-           exit( EXIT_FAILURE );
-       }
-
-       /* Create a GLX context for OpenGL rendering */
-       ctxt = glXCreateNewContext( dpy, fbConfigs[0], GLX_RGBA_TYPE,
-                                      NULL, True );
-    }
-
-            if (vis) {
-                ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
-            } else {
-                vis = get_default_visual(dpy);
-                int saved_visualid = vis->visualid;
-
-                vis->visualid = visualid ?: saved_visualid;
-                ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
-                vis->visualid = saved_visualid;
-            }
-
-            if (ctxt) {
-                int fake_ctxt = ++process->next_available_context_number;
-
-                set_association_fakecontext_visual(process, fake_ctxt, vis);
-                set_association_fakecontext_glxcontext(process, fake_ctxt,
-                                                       ctxt);
-                ret.i = fake_ctxt;
-
-                _create_context(process, fake_ctxt, fake_shareList);
-            } else {
-                ret.i = 0;
-            }
-#endif
 
             // TODO GW save fbConfigs to the GLState here
             int fake_ctxt = ++process->next_available_context_number;
@@ -1409,8 +1360,19 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             set_association_fakecontext_visual(process, fake_ctxt, vis);
             ret.i = fake_ctxt;
 
+            // Work out format flags from visual
+            // TODO GW - could do better?
+            int formatFlags = GLO_FF_DEFAULT & ~GLO_FF_BITS_MASK;
+            if (vis->depth == 16)
+              formatFlags |= GLO_FF_BITS_16;
+            else if (vis->depth == 24)
+              formatFlags |= GLO_FF_BITS_24;
+            else
+              formatFlags |= GLO_FF_BITS_32;
+
             GLState *state = _create_context(process, fake_ctxt, fake_shareList);
-            state->formatFlags = GLO_FF_DEFAULT; // FIXME GW get from visual
+            state->context = glo_context_create(formatFlags,
+                                                shareListState?shareListState->context:0);
 
             break;
         }
@@ -1429,10 +1391,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
             if (fbconfig) {
                 int fake_shareList = args[3];
-#if 0 //GW
-                GLXContext shareList = get_association_fakecontext_glxcontext(
-                                process, fake_shareList);
-#endif
+                GLState *shareListState = get_glstate_for_fake_ctxt(process, fake_shareList);
+
                 process->next_available_context_number++;
                 int fake_ctxt = process->next_available_context_number;
 #if 0 //GW
@@ -1444,7 +1404,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 ret.i = fake_ctxt;
 
                 GLState *state = _create_context(process, fake_ctxt, fake_shareList);
-                state->formatFlags = GLO_FF_DEFAULT; // FIXME GW get from fbconfig
+                state->context = glo_context_create(GLO_FF_DEFAULT,
+                                                    shareListState?shareListState->context:0); // FIXME GW get from fbconfig
             }
             break;
         }
@@ -1582,7 +1543,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                        if (!vis)
                            vis = get_default_visual(dpy);
 
-                       glstate->drawable = surface = alloc_surface(dpy, vis, glstate, 0, 800, 500);
+                       glstate->drawable = surface = glo_surface_create(800,500, glstate->context);
 
                        fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
 
@@ -1601,8 +1562,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         fprintf(stderr, "No drawable!\n");
                         exit(1);
                     }
-
-                    glo_surface_makecurrent(glstate->drawable);
 
                     process->current_state = glstate;
 
