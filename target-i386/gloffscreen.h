@@ -108,7 +108,10 @@ extern int glo_flags_get_from_glx(unsigned int *fbConfig, int assumeBooleans);
  * doing this on Windows at least.
  */
 
+/* Fudge stuff for now */
+#ifndef _WIN32
 #include <X11/Xlib.h>
 extern Display *glo_get_dpy(void);
+#endif
 
 #endif /* GLOFFSCREEN_H_ */
