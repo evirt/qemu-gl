@@ -262,7 +262,7 @@ ClientGLXDrawable get_association_serverdrawable_clientdrawable(
 GloSurface *get_association_clientdrawable_serverdrawable(
                 ProcessState *process, ClientGLXDrawable clientdrawable);
 
-void blit_drawable_to_guest(Display *dpy, GloSurface *drawable, ProcessState *process, int w, int h, int stride, char *buffer)
+void blit_drawable_to_guest(GloSurface *drawable, ProcessState *process, int w, int h, int stride, char *buffer)
 {
     int irow, dw, dh;
 //    fprintf(stderr, "give_update to: %08x\n", drawable);
@@ -980,40 +980,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                     process, client_drawable);
 
 //            local_render(dpy, params[0], params[1]);
-            blit_drawable_to_guest(dpy, drawable, process, params[0], params[1],
+            blit_drawable_to_guest(drawable, process, params[0], params[1],
                                    (int)args[2], (char*)args[3]);
             break;
-#if 0 //GW?
-            if (drawable) {
-                WindowPosStruct pos;
-
-                glo_surface_get_size(drawable, &pos.width, &pos.height);
-                if (!
-                    (params[2] == pos.width && params[3] == pos.height)) {
-                    int redim = !(params[2] == pos.width &&
-                                  params[3] == pos.height);
-
-//                    fprintf(stderr, "old x=%d y=%d width=%d height=%d\n",
-//                            pos.x, pos.y, pos.width, pos.height);
-//                    fprintf(stderr, "new x=%d y=%d width=%d height=%d\n",
-//                            params[0], params[1], params[2], params[3]);
-                    XMoveResizeWindow(dpy, drawable, params[0], params[1],
-                                      params[2], params[3]);
-
-                    XSync(dpy, 0);
-                    /* The window should have resized by now, but force the
-                     * new size anyway.  */
-                    //glo_surface_get_size(drawable, &pos.width, &pos.height);
-                    pos.width = params[2];
-                    pos.height = params[3];
-                    process->currentDrawablePos = pos;
-                    // if (getenv("FORCE_GL_VIEWPORT"))
-                    if (redim)
-                        glViewport(0, 0, pos.width, pos.height);
-                }
-            }
-            break;
-#endif
 
         }
 
