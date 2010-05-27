@@ -167,6 +167,7 @@ typedef struct {
 
     GloContext *context; // context (owned by this)
     GloSurface *drawable; // current drawable set with MakeCurrent (*not* owned by this but by the assoc)
+    Assoc association_clientdrawable_serverdrawable[MAX_ASSOC_SIZE];
 
     void *vertexPointer;
     void *normalPointer;
@@ -246,7 +247,6 @@ typedef struct {
     int nfbconfig_total;
 
     Assoc association_fakepbuffer_pbuffer[MAX_ASSOC_SIZE];
-    Assoc association_clientdrawable_serverdrawable[MAX_ASSOC_SIZE];
 
     int primitive;
     int bufsize;
@@ -258,9 +258,9 @@ static ProcessState processes[MAX_HANDLED_PROCESS];
 
 typedef void *ClientGLXDrawable;
 ClientGLXDrawable get_association_serverdrawable_clientdrawable(
-                ProcessState *process, GloSurface *serverdrawable);
+                GLState *state, GloSurface *serverdrawable);
 GloSurface *get_association_clientdrawable_serverdrawable(
-                ProcessState *process, ClientGLXDrawable clientdrawable);
+                GLState *state, ClientGLXDrawable clientdrawable);
 
 void blit_drawable_to_guest(GloSurface *drawable, ProcessState *process, int w, int h, int stride, char *buffer)
 {
@@ -277,8 +277,7 @@ void blit_drawable_to_guest(GloSurface *drawable, ProcessState *process, int w, 
     // if resized, reallocate. else...
     if(!buffer ) {
         int i;
-        ClientGLXDrawable client_drawable = get_association_serverdrawable_clientdrawable(
-                process, drawable);
+        ClientGLXDrawable client_drawable;
 
         fprintf(stderr, "Lookup: %08x\n", drawable);
 //        fprintf(stderr, "dim %d x %d\n", w, h);
@@ -295,24 +294,24 @@ void blit_drawable_to_guest(GloSurface *drawable, ProcessState *process, int w, 
 	if(!glstate)
 	    return;
 
+	client_drawable = get_association_serverdrawable_clientdrawable(
+	                            glstate, drawable);
+
         fprintf(stderr, "re");
 
-        GloSurface *oldSurface = get_association_clientdrawable_serverdrawable(process,
-            client_drawable);
-
         GloSurface *surface = glo_surface_create(w, h, glstate->context);
-        if (glstate->drawable != oldSurface) {
-          fprintf(stderr, "glstate->drawable != oldSurface - not MadeCurrent??\n");
+        if (glstate->drawable != drawable) {
+          fprintf(stderr, "glstate->drawable != oldSurface ???\n");
           exit(1);
         }
         glstate->drawable = surface;
 
         fprintf(stderr, "Replace: %08x\n", glstate->drawable);
-        set_association_clientdrawable_serverdrawable(process,
+        set_association_clientdrawable_serverdrawable(glstate,
                                             client_drawable, glstate->drawable);
 
-        if (oldSurface)
-            glo_surface_destroy(oldSurface);
+        if (drawable)
+            glo_surface_destroy(drawable);
 
         glo_surface_makecurrent(glstate->drawable);
         return;
@@ -409,56 +408,56 @@ void unset_association_fakepbuffer_pbuffer(ProcessState *process,
 /* ---- */
 
 GloSurface *get_association_clientdrawable_serverdrawable(
-                ProcessState *process, ClientGLXDrawable clientdrawable)
+                GLState *state, ClientGLXDrawable clientdrawable)
 {
     int i;
 
     for (i = 0; i < MAX_ASSOC_SIZE &&
-                    process->association_clientdrawable_serverdrawable[i].key;
+                    state->association_clientdrawable_serverdrawable[i].key;
                     i++)
-        if ((ClientGLXDrawable) process->
+        if ((ClientGLXDrawable) state->
                         association_clientdrawable_serverdrawable[i].key ==
                         clientdrawable)
-            return (GloSurface*)process->
+            return (GloSurface*)state->
                 association_clientdrawable_serverdrawable[i].value;
 
     return (GloSurface*) 0;
 }
 
 ClientGLXDrawable get_association_serverdrawable_clientdrawable(
-                ProcessState *process, GloSurface *serverdrawable)
+                GLState *state, GloSurface *serverdrawable)
 {
     int i;
 
     for (i = 0; i < MAX_ASSOC_SIZE &&
-                    process->association_clientdrawable_serverdrawable[i].key;
+                    state->association_clientdrawable_serverdrawable[i].key;
                     i ++)
-        if ((GloSurface*)process->
+        if ((GloSurface*)state->
                         association_clientdrawable_serverdrawable[i].value ==
                         serverdrawable)
             return (ClientGLXDrawable)
-                    process->association_clientdrawable_serverdrawable[i].key;
+                    state->association_clientdrawable_serverdrawable[i].key;
 
     return NULL;
 }
 
 void set_association_clientdrawable_serverdrawable(
-                ProcessState *process, ClientGLXDrawable clientdrawable,
+                GLState *state, ClientGLXDrawable clientdrawable,
                 GloSurface *serverdrawable)
 {
     int i;
 
-    for (i = 0; process->association_clientdrawable_serverdrawable[i].key;
+    for (i = 0; state->association_clientdrawable_serverdrawable[i].key;
                     i ++)
-        if ((ClientGLXDrawable) process->
+        if ((ClientGLXDrawable) state->
                         association_clientdrawable_serverdrawable[i].key ==
                         clientdrawable)
             break;
 
     if (i < MAX_ASSOC_SIZE) {
-        process->association_clientdrawable_serverdrawable[i].key =
+         state->association_clientdrawable_serverdrawable[i].key =
                 (void *) clientdrawable;
-        process->association_clientdrawable_serverdrawable[i].value =
+         state->association_clientdrawable_serverdrawable[i].value =
                 (void *) serverdrawable;
     } else
         fprintf(stderr, "MAX_ASSOC_SIZE reached\n");
@@ -704,6 +703,13 @@ static void destroy_gl_state(GLState *state)
 {
     int i;
 
+    for (i = 0; i < MAX_ASSOC_SIZE && state->
+                    association_clientdrawable_serverdrawable[i].key; i ++) {
+        GloSurface *surface = (GloSurface *) state->
+            association_clientdrawable_serverdrawable[i].value;
+
+        glo_surface_destroy(surface);
+    }
     if (state->context)
       glo_context_destroy(state->context);
 
@@ -867,15 +873,6 @@ void disconnect(ProcessState *process)
             ptr_func_glXDestroyPbuffer(dpy, pbuffer);
     }
 
-    for (i = 0; i < MAX_ASSOC_SIZE && process->
-                    association_clientdrawable_serverdrawable[i].key; i ++) {
-        GloSurface *surface = (GloSurface *) process->
-            association_clientdrawable_serverdrawable[i].value;
-
-        glo_surface_destroy(surface);
-    }
-
-
     for (i = 0; i < process->nb_states; i++) {
         destroy_gl_state(process->glstates[i]);
         qemu_free(process->glstates[i]);
@@ -971,13 +968,18 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int *params = (int *) args[1];
             ClientGLXDrawable client_drawable = to_drawable(args[0]);
 
+            if (!process->current_state) {
+              fprintf(stderr, "!process->current_state\n");
+              break;
+            }
+
             if (display_function_call)
                 fprintf(stderr, "client_drawable=%p\n",
                         (void *) client_drawable);
 
             GLXDrawable drawable =
                     get_association_clientdrawable_serverdrawable(
-                                    process, client_drawable);
+                        process->current_state, client_drawable);
 
 //            local_render(dpy, params[0], params[1]);
             blit_drawable_to_guest(drawable, process, params[0], params[1],
@@ -1264,28 +1266,17 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                      //FIXMEIM - the order of lookup seems wrong here. might be faster to lookup in a different order.
                     /* If the host drawable is a pbuffer, lookup the associated
                        context */
-                    GloSurface *surface = get_association_clientdrawable_serverdrawable(
-                                                            process, client_drawable);
-                    if (!surface) {
+                    glstate->drawable = get_association_clientdrawable_serverdrawable(
+                                                            glstate, client_drawable);
+                    if (!glstate->drawable) {
                        /* else, create an ordinary drawable */
-                       glstate->drawable = surface = glo_surface_create(800,500, glstate->context);
+                       glstate->drawable = glo_surface_create(800,500, glstate->context);
 
                        fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
 
-                       set_association_clientdrawable_serverdrawable(process,
+                       set_association_clientdrawable_serverdrawable(glstate,
                                        client_drawable, glstate->drawable);
 
-                   }
-
-                   if(glstate->drawable != surface) {
-                        /* else try to lookup ordinary drawable */
-                        glstate->drawable = surface;
-
-                    }
-
-                    if(!glstate->drawable){
-                        fprintf(stderr, "No drawable!\n");
-                        exit(1);
                     }
 
                     process->current_state = glstate;
@@ -1304,9 +1295,15 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             if (display_function_call)
                 fprintf(stderr, "client_drawable=%p\n", client_drawable);
 
+            if (!process->current_state) {
+              fprintf(stderr, "!process->current_state\n");
+              break;
+            }
+
+
             GLXDrawable drawable =
                 get_association_clientdrawable_serverdrawable(
-                                process, client_drawable);
+                    process->current_state, client_drawable);
             if (!drawable) {
                 fprintf(stderr, "unknown client_drawable (%p) !\n",
                         (void *) client_drawable);
@@ -1740,7 +1737,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             ClientGLXDrawable client_drawable = to_drawable(args[1]);
             GLXDrawable drawable =
                     get_association_clientdrawable_serverdrawable(
-                                    process, client_drawable);
+                                    glstate, client_drawable);
 
             if (display_function_call)
                 fprintf(stderr, "client_drawable=%p\n",
