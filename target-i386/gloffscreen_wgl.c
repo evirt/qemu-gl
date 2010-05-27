@@ -34,24 +34,41 @@
 #include <GL/glext.h>
 #include <GL/wglext.h>
 
+/* In Windows, you must create a window *before* you can create a pbuffer or
+ * get a context. So we create a hidden Window on startup (see glo_init/GloMain).
+ *
+ * Also, you can't share contexts that have different pixel formats, so we can't just
+ * create a new context from the window. We must create a whole new PBuffer just for
+ * a context :(
+ */
 
 struct GloMain {
   HINSTANCE             hInstance;
   HDC                   hDC;
-  HWND                  hWnd;
+  HWND                  hWnd; /* Our hidden window */
   HGLRC                 hContext;
 };
 struct GloMain glo;
 int glo_inited = 0;
 
+struct _GloContext {
+  int                   formatFlags;
+
+  /* Pixel format returned by wglChoosePixelFormat */
+  int                   wglPixelFormat;
+  /* We need a pbuffer to make a context of the right pixelformat :( */
+  HPBUFFERARB           hPBuffer; 
+  HDC                   hDC;
+  HGLRC                 hContext;
+};
+
 struct _GloSurface {
   GLuint                width;
-  GLuint                height;
-  GLuint                formatFlags;
+  GLuint                height;  
 
+  GloContext           *context;
   HPBUFFERARB           hPBuffer;
   HDC                   hDC;
-  HGLRC                 hRC;
 };
 
 #define GLO_WINDOW_CLASS "QEmuGLClass"
@@ -164,13 +181,11 @@ void glo_kill(void) {
 
 /* ------------------------------------------------------------------------ */
 
-/* Create a surface with given width and height, formatflags are from the
- * GLO_ constants */
-GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurface *shareWith) {
-    GloSurface           *surface;
-    int                   rgbaBits[4];
+/* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
+GloContext *glo_context_create(int formatFlags, GloSurface *shareLists) {
+    GloContext *context;
     // pixel format attributes
-    int pf_attri[] = {
+    int          pf_attri[] = {
        WGL_SUPPORT_OPENGL_ARB, TRUE,      
        WGL_DRAW_TO_PBUFFER_ARB, TRUE,     
        WGL_RED_BITS_ARB, 8,             
@@ -182,88 +197,140 @@ GloSurface *glo_surface_create(int width, int height, int formatFlags, GloSurfac
        WGL_DOUBLE_BUFFER_ARB, FALSE,      
        0                                
     };
-    float pf_attrf[] = {0, 0};
+    float        pf_attrf[] = {0, 0};
     unsigned int numReturned = 0;
-    int          pixelFormat;
-    int          pb_attr[] = { 0 }; // no specific pbuffer attributes
+    int          pb_attr[] = { 0 };
+    int          rgbaBits[4];
+
 
     if (!glo_inited)
       glo_init();
 
+    context = (GloContext*)malloc(sizeof(GloContext));
+    memset(context, 0, sizeof(GloContext));
+    context->formatFlags = formatFlags;
+
     // set up the surface format from the flags we were given
-    glo_flags_get_rgba_bits(formatFlags, rgbaBits);
+    glo_flags_get_rgba_bits(context->formatFlags, rgbaBits);
     pf_attri[5]  = rgbaBits[0];
     pf_attri[7]  = rgbaBits[1];
     pf_attri[9]  = rgbaBits[2];
     pf_attri[11] = rgbaBits[3];
-    pf_attri[13] = glo_flags_get_depth_bits(formatFlags);
-    pf_attri[15] = glo_flags_get_stencil_bits(formatFlags);
+    pf_attri[13] = glo_flags_get_depth_bits(context->formatFlags);
+    pf_attri[15] = glo_flags_get_stencil_bits(context->formatFlags);
 
-    wglChoosePixelFormatARB( glo.hDC, pf_attri, pf_attrf, 1, &pixelFormat, &numReturned);
+    // find out what pixel format to use
+    wglChoosePixelFormatARB( glo.hDC, pf_attri, pf_attrf, 1, &context->wglPixelFormat, &numReturned);
     if( numReturned == 0 ) {
         printf( "No matching configs found.\n" );
         exit( EXIT_FAILURE );
     }
 
+    // We create a tiny pbuffer - just so we can make a context of the right pixel format
+    context->hPBuffer = wglCreatePbufferARB( glo.hDC, context->wglPixelFormat, 
+                                             16, 16, pb_attr );
+    if( !context->hPBuffer ) {
+      printf( "Couldn't create the PBuffer\n" );
+      exit( EXIT_FAILURE );
+    }
+    context->hDC      = wglGetPbufferDCARB( context->hPBuffer );
+    if( !context->hDC ) {
+      printf( "Couldn't create the DC\n" );
+      exit( EXIT_FAILURE );
+    }
+
+    context->hContext = wglCreateContext(context->hDC);
+    if (context->hContext == NULL) {
+      printf( "Unable to create GL context\n" );
+      exit( EXIT_FAILURE );
+    }
+
+    if (shareLists) {
+      // Need to share lists...
+      wglShareLists(shareLists->context->hContext, context->hContext);
+    }
+
+    return context;
+}
+
+/* Destroy a previouslu created OpenGL context */
+void glo_context_destroy(GloContext *context) {
+    if (!context) return;
+
+    wglMakeCurrent( NULL, NULL );
+    if( context->hPBuffer != NULL ) {
+        wglReleasePbufferDCARB( context->hPBuffer, context->hDC );
+        wglDestroyPbufferARB( context->hPBuffer );
+    }
+    if( context->hDC != NULL ) {
+        ReleaseDC( glo.hWnd, context->hDC );
+    }
+    if (context->hContext) {
+      wglDeleteContext(context->hContext);
+    }
+    free(context);
+}
+
+/* ------------------------------------------------------------------------ */
+
+/* Create a surface with given width and height, formatflags are from the
+ * GLO_ constants */
+GloSurface *glo_surface_create(int width, int height, GloContext *context) {
+    GloSurface           *surface;
+    int                   pb_attr[] = { 0 };
+    
     // Create the p-buffer...
     surface = (GloSurface*)malloc(sizeof(GloSurface));
     memset(surface, 0, sizeof(GloSurface));
     surface->width = width;
     surface->height = height;
-    surface->formatFlags = formatFlags;
-    surface->hPBuffer = wglCreatePbufferARB( glo.hDC, pixelFormat, surface->width, surface->height, pb_attr );
-    surface->hDC      = wglGetPbufferDCARB( surface->hPBuffer );
-    surface->hRC      = wglCreateContext( surface->hDC );
+    surface->context = context;
 
+    surface->hPBuffer = wglCreatePbufferARB( glo.hDC, context->wglPixelFormat, 
+                                             surface->width, surface->height, pb_attr );
     if( !surface->hPBuffer ) {
       printf( "Couldn't create the PBuffer\n" );
       exit( EXIT_FAILURE );
     }
-
-    if (shareWith) {
-      // Need to share lists AND copy state
-      wglShareLists(shareWith->hRC, surface->hRC);
-      wglCopyContext(shareWith->hRC, surface->hRC, GL_ALL_ATTRIB_BITS);
+    surface->hDC      = wglGetPbufferDCARB( surface->hPBuffer );
+    if( !surface->hDC ) {
+      printf( "Couldn't create the DC\n" );
+      exit( EXIT_FAILURE );
     }
-
-
-    glo_surface_makecurrent(surface);
 
     return surface;
 }
 
 /* Destroy the given surface */
 void glo_surface_destroy(GloSurface *surface) {
-    if( surface->hRC != NULL ) {
-        wglMakeCurrent( surface->hDC, surface->hRC );
-//       wglDeleteContext( surface->hRC ); // why not?
+    if (!surface) return;
+
+    wglMakeCurrent( NULL, NULL );
+    if( surface->hPBuffer != NULL ) {
         wglReleasePbufferDCARB( surface->hPBuffer, surface->hDC );
         wglDestroyPbufferARB( surface->hPBuffer );
-        surface->hRC = NULL;
     }
     if( surface->hDC != NULL ) {
         ReleaseDC( glo.hWnd, surface->hDC );
-        surface->hDC = NULL;
     }
     free(surface);
 }
 
 /* Make the given surface current */
-void glo_surface_makecurrent(GloSurface *surface) {
+int glo_surface_makecurrent(GloSurface *surface) {
   if (surface) {
-    wglMakeCurrent( surface->hDC, surface->hRC );
+    return wglMakeCurrent( surface->hDC, surface->context->hContext );
   } else {
-    wglMakeCurrent( NULL, NULL );
+    return wglMakeCurrent( NULL, NULL );
   }
-
 }
 
 /* Get the contents of the given surface */
-void glo_surface_getcontents(GloSurface *surface, void *data) {
-    int bpp = glo_flags_get_bytes_per_pixel(surface->formatFlags);
+void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
+    int bpp = glo_flags_get_bytes_per_pixel(surface->context->formatFlags);
     int rowsize = surface->width*bpp;
     int glFormat, glType;
-    glo_flags_get_readpixel_type(surface->formatFlags, &glFormat, &glType);
+    glo_flags_get_readpixel_type(surface->context->formatFlags, &glFormat, &glType);
 #ifdef GETCONTENTS_INDIVIDUAL
     GLubyte *b = (GLubyte *)data;
     int irow;
