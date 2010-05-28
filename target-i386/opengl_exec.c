@@ -114,7 +114,7 @@ static const int defaultAttribList[] = {
     GLX_RED_SIZE, 1,
     GLX_GREEN_SIZE, 1,
     GLX_BLUE_SIZE, 1,
-    GLX_DOUBLEBUFFER,
+    GLX_DOUBLEBUFFER, // FIXMEIM - probably not now?
     None
 };
 
@@ -262,62 +262,67 @@ ClientGLXDrawable get_association_serverdrawable_clientdrawable(
 GloSurface *get_association_clientdrawable_serverdrawable(
                 GLState *state, ClientGLXDrawable clientdrawable);
 
-void blit_drawable_to_guest(GloSurface *drawable, ProcessState *process, int w, int h, int stride, char *buffer)
+//FIXMEIM - can be simpler with a little pointer math.
+static inline GLState *get_glstate_from_surface(ProcessState *process, GloSurface *surface) {
+    int i;
+    GLState *glstate = NULL;
+    for (i = 0; i < process->nb_states; i ++) {
+        if (process->glstates[i]->drawable == surface) {
+            glstate = process->glstates[i];
+            break;
+        }
+    }
+    return glstate;
+}
+
+void blit_drawable_to_guest(GloSurface *surface, ProcessState *process, int w, int h, int stride, char *buffer)
 {
     int irow, dw, dh;
 //    fprintf(stderr, "give_update to: %08x\n", drawable);
 
-    glo_surface_get_size(drawable, &dw, &dh);
-    fprintf(stderr, "dim %d x %d\n", w, h);
-    fprintf(stderr, "buf dim %d x %d\n", dw, dh);
-    fprintf(stderr, "buf %08x, stride %d\n", buffer, stride);
-
-
+//    glo_surface_get_size(drawable, &dw, &dh);
+//    fprintf(stderr, "dim %d x %d\n", w, h);
+//    fprintf(stderr, "buf dim %d x %d\n", dw, dh);
+//    fprintf(stderr, "buf %08x, stride %d\n", buffer, stride);
 
     // if resized, reallocate. else...
-    if(!buffer ) {
-        int i;
+    if(!buffer) {
         ClientGLXDrawable client_drawable;
-
-        fprintf(stderr, "Lookup: %08x\n", drawable);
-//        fprintf(stderr, "dim %d x %d\n", w, h);
-        /* Lookup GLState struct for this drawable - eg one that has been glXMakeCurrent-ed */
-        GLState *glstate = NULL;
-        for (i = 0; i < process->nb_states; i ++) {
-//            fprintf(stderr, "cmp %08x %08x\n", process->glstates[i]->drawable, drawable);
-            if (process->glstates[i]->drawable == drawable) {
-                glstate = process->glstates[i];
-                break;
-            }
-        }
+        GLState *glstate = get_glstate_from_surface(process, surface);
+        GloSurface *old_surface = surface;
 
 	if(!glstate)
 	    return;
 
-	client_drawable = get_association_serverdrawable_clientdrawable(
-	                            glstate, drawable);
+        fprintf(stderr, "resize_start\n");
 
-        fprintf(stderr, "re");
+        client_drawable =
+            get_association_serverdrawable_clientdrawable(glstate, old_surface);
 
-        GloSurface *surface = glo_surface_create(w, h, glstate->context);
-        if (glstate->drawable != drawable) {
-          fprintf(stderr, "glstate->drawable != oldSurface ???\n");
-          exit(1);
-        }
+        surface = glo_surface_create(w, h, glstate->context);
+
+        bind_clientdrawable_serverdrawable(glstate, client_drawable, surface);
         glstate->drawable = surface;
 
-        fprintf(stderr, "Replace: %08x\n", glstate->drawable);
-        set_association_clientdrawable_serverdrawable(glstate,
-                                            client_drawable, glstate->drawable);
+        glo_surface_destroy(old_surface); // FIXMEIM - should we check if not NULL?
 
-        if (drawable)
-            glo_surface_destroy(drawable);
+        if(process->current_state == glstate) {
+            fprintf(stderr, "surface is current. fixup! %08x\n", glstate->drawable);
+            glo_surface_makecurrent(glstate->drawable);
+        }
+        else {
+            fprintf(stderr, "Surface is not current! %08x %08x\n", process->current_state, process->current_state->drawable);
+            exit(1);
+        }
 
-        glo_surface_makecurrent(glstate->drawable);
+        glo_surface_set_ready(surface, 1);
+        fprintf(stderr, "resize_done\n");
         return;
     }
 
-    glo_surface_getcontents(drawable, stride, buffer);
+    if(glo_surface_ready(surface))
+        glo_surface_getcontents(surface, stride, buffer);
+
 }
 
 
@@ -406,7 +411,6 @@ void unset_association_fakepbuffer_pbuffer(ProcessState *process,
 }
 
 /* ---- */
-
 GloSurface *get_association_clientdrawable_serverdrawable(
                 GLState *state, ClientGLXDrawable clientdrawable)
 {
@@ -441,7 +445,7 @@ ClientGLXDrawable get_association_serverdrawable_clientdrawable(
     return NULL;
 }
 
-void set_association_clientdrawable_serverdrawable(
+void bind_clientdrawable_serverdrawable(
                 GLState *state, ClientGLXDrawable clientdrawable,
                 GloSurface *serverdrawable)
 {
@@ -1270,12 +1274,15 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                                             glstate, client_drawable);
                     if (!glstate->drawable) {
                        /* else, create an ordinary drawable */
-                       glstate->drawable = glo_surface_create(800,500, glstate->context);
+                       GloSurface *surface;
+                       surface = glo_surface_create(4, 4, glstate->context);
 
                        fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
 
-                       set_association_clientdrawable_serverdrawable(glstate,
-                                       client_drawable, glstate->drawable);
+                       bind_clientdrawable_serverdrawable(glstate,
+                                       client_drawable, surface);
+
+                       glstate->drawable = surface;
 
                     }
 
