@@ -149,11 +149,6 @@ typedef struct {
 
 
 typedef struct {
-    int width;
-    int height;
-} WindowPosStruct;
-
-typedef struct {
     GLbitfield mask;
     int activeTextureIndex;
 } ClientState;
@@ -230,8 +225,7 @@ typedef struct {
 typedef struct {
     ProcessStruct p;
 
-    int x, y, width, height;
-    WindowPosStruct currentDrawablePos;
+//    int x, y, width, height;
 
     int next_available_context_number;
     int next_available_pbuffer_number;
@@ -275,54 +269,46 @@ static inline GLState *get_glstate_from_surface(ProcessState *process, GloSurfac
     return glstate;
 }
 
-void blit_drawable_to_guest(GloSurface *surface, ProcessState *process, int w, int h, int stride, char *buffer)
+static inline void render_surface(GloSurface *surface, int stride, char *buffer)
 {
-    int irow, dw, dh;
-//    fprintf(stderr, "give_update to: %08x\n", drawable);
-
-//    glo_surface_get_size(drawable, &dw, &dh);
-//    fprintf(stderr, "dim %d x %d\n", w, h);
-//    fprintf(stderr, "buf dim %d x %d\n", dw, dh);
-//    fprintf(stderr, "buf %08x, stride %d\n", buffer, stride);
-
-    // if resized, reallocate. else...
-    if(!buffer) {
-        ClientGLXDrawable client_drawable;
-        GLState *glstate = get_glstate_from_surface(process, surface);
-        GloSurface *old_surface = surface;
-
-	if(!glstate)
-	    return;
-
-        fprintf(stderr, "resize_start\n");
-
-        client_drawable =
-            get_association_serverdrawable_clientdrawable(glstate, old_surface);
-
-        surface = glo_surface_create(w, h, glstate->context);
-
-        bind_clientdrawable_serverdrawable(glstate, client_drawable, surface);
-        glstate->drawable = surface;
-
-        glo_surface_destroy(old_surface); // FIXMEIM - should we check if not NULL?
-
-        if(process->current_state == glstate) {
-            fprintf(stderr, "surface is current. fixup! %08x\n", glstate->drawable);
-            glo_surface_makecurrent(glstate->drawable);
-        }
-        else {
-            fprintf(stderr, "Surface is not current! %08x %08x\n", process->current_state, process->current_state->drawable);
-            exit(1);
-        }
-
-        glo_surface_set_ready(surface, 1);
-        fprintf(stderr, "resize_done\n");
-        return;
-    }
-
     if(glo_surface_ready(surface))
         glo_surface_getcontents(surface, stride, buffer);
+}
 
+static inline void resize_surface(ProcessState *process, GloSurface *surface,
+                                  int w, int h) {
+    // if resized, reallocate. else...
+    ClientGLXDrawable client_drawable;
+    GLState *glstate = get_glstate_from_surface(process, surface);
+    GloSurface *old_surface = surface;
+
+    if(!glstate)
+        return;
+
+    fprintf(stderr, "resize_start\n");
+
+    client_drawable =
+        get_association_serverdrawable_clientdrawable(glstate, old_surface);
+
+    surface = glo_surface_create(w, h, glstate->context);
+
+    bind_clientdrawable_serverdrawable(glstate, client_drawable, surface);
+    glstate->drawable = surface;
+
+    glo_surface_destroy(old_surface); // FIXMEIM - should we check if not NULL?
+
+    // Client doesnt know surface is new - need to MakeCurrent
+    if(process->current_state == glstate) {
+        glo_surface_makecurrent(glstate->drawable);
+    }
+    else {
+        fprintf(stderr, "Surface is not current! %08x %08x\n",
+        process->current_state, process->current_state->drawable);
+        exit(1);
+    }
+
+    glo_surface_set_ready(surface, 1);
+    fprintf(stderr, "resize_done\n");
 }
 
 
@@ -660,20 +646,6 @@ static XVisualInfo *get_visual_info_from_visual_id(Display *dpy,
     return visInfo;
 }
 
-typedef struct {
-    int x;
-    int y;
-    int width;
-    int height;
-    int xhot;
-    int yhot;
-    int *pixels;
-} ClientCursor;
-
-#if 0
-static ClientCursor client_cursor = { 0 };
-#endif
-
 static void do_glClientActiveTextureARB(int texture)
 {
     GET_EXT_PTR_NO_FAIL(void, glClientActiveTextureARB, (int));
@@ -958,73 +930,30 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case -1:
         break;
 
-    case _synchronize_func:
-        ret.i = 1;
-        break;
-
-    case _changeWindowState_func:
+    case _resize_surface_func:
         {
-        break;
-        }
-
-    case _moveResizeWindow_func:
-        {
-            int *params = (int *) args[1];
             ClientGLXDrawable client_drawable = to_drawable(args[0]);
-
-            if (!process->current_state) {
-              fprintf(stderr, "!process->current_state\n");
-              break;
-            }
-
-            if (display_function_call)
-                fprintf(stderr, "client_drawable=%p\n",
-                        (void *) client_drawable);
-
-            GLXDrawable drawable =
+            GloSurface *surface =
                     get_association_clientdrawable_serverdrawable(
                         process->current_state, client_drawable);
 
-//            local_render(dpy, params[0], params[1]);
-            blit_drawable_to_guest(drawable, process, params[0], params[1],
-                                   (int)args[2], (char*)args[3]);
+            resize_surface(process, surface, (int)args[1], (int)args[2]);
             break;
 
         }
 
-    case _send_cursor_func:
+    case _render_surface_func:
         {
-#if 0
-            int x = args[0];
-            int y = args[1];
-            int width = args[2];
-            int height = args[3];
-            int xhot = args[4];
-            int yhot = args[5];
-            int *pixels = (int *) args[6];
+            ClientGLXDrawable client_drawable = to_drawable(args[0]);
+            GloSurface *surface =
+                    get_association_clientdrawable_serverdrawable(
+                        process->current_state, client_drawable);
+            int stride = (int)args[1];
+            char *render_buffer = (char*)args[2];
 
-            client_cursor.x = x;
-            client_cursor.y = y;
-            client_cursor.width = width;
-            client_cursor.height = height;
-            client_cursor.xhot = xhot;
-            client_cursor.yhot = yhot;
-            if (pixels) {
-                client_cursor.pixels =
-                    qemu_realloc(client_cursor.pixels,
-                            client_cursor.width * client_cursor.height *
-                            sizeof(int));
-                memcpy(client_cursor.pixels, pixels,
-                       client_cursor.width * client_cursor.height *
-                       sizeof(int));
-            }
-            int in_window = (x >= 0 && y >= 0 &&
-                             x < process->currentDrawablePos.width &&
-                             y < process->currentDrawablePos.height);
-            // fprintf(stderr, "cursor at %d %d (%s)\n", x, y, (in_window) ?
-            // "in window" : "not in window");
-#endif
+            render_surface(surface, stride, render_buffer);
             break;
+
         }
 
     case glXWaitGL_func:
