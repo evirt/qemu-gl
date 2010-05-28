@@ -297,23 +297,14 @@ static const int _init32_signature[] =
 static const int _init64_signature[] =
     { TYPE_NONE, 1, 2, TYPE_INT, TYPE_OUT_1INT };
 
-static const int _synchronize_signature[] = { TYPE_INT, 0, 0 };
-
-static const int _serialized_calls_signature[] =
-    { TYPE_NONE, 0, 1, TYPE_ARRAY_CHAR };
-
 static const int _changeWindowState_signature[] =
     { TYPE_NONE, 0, 2, TYPE_INT, TYPE_INT };
 
-static const int _moveResizeWindow_signature[] =
-    {TYPE_NONE, 1, 4, TYPE_INT, TYPE_3INT, TYPE_INT, TYPE_OUT_ARRAY_CHAR};
+static const int _resize_surface_signature[] =
+    {TYPE_NONE, 0, 3, TYPE_INT, TYPE_INT, TYPE_INT};
 
-static const int _send_cursor_signature[] =
-    { TYPE_NONE, 0, 7, TYPE_INT, TYPE_INT,
-    TYPE_INT, TYPE_INT,
-    TYPE_INT, TYPE_INT,
-    TYPE_ARRAY_INT
-};
+static const int _render_surface_signature[] =
+    {TYPE_NONE, 1, 3, TYPE_INT, TYPE_INT, TYPE_OUT_ARRAY_CHAR};
 
 /* XVisualInfo* glXChooseVisual( Display *dpy, int screen, int *attribList ) */
 static const int glXChooseVisual_signature[] =
@@ -1093,7 +1084,6 @@ static inline int compute_arg_length(FILE *err_file, int func_number,
 
 #define IS_NULL_POINTER_OK_FOR_FUNC(func_number) \
                  (func_number == glBitmap_func || \
-                  func_number == _send_cursor_func || \
                   func_number == glTexImage1D_func || \
                   func_number == glTexImage2D_func || \
                   func_number == glTexImage3D_func || \
