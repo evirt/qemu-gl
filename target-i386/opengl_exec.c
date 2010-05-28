@@ -926,6 +926,11 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 tab_opengl_calls_name[func_number]);
     }
 
+    if(func_number != glXSwapBuffers_func &&
+       func_number != glXMakeCurrent_func && tab_opengl_calls_name[func_number][2] == 'X')
+	fprintf(stderr, "[%d]> %s\n", process->p.process_id,
+                tab_opengl_calls_name[func_number]);
+
     switch (func_number) {
     case -1:
         break;
