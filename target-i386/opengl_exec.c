@@ -114,7 +114,7 @@ static const int defaultAttribList[] = {
     GLX_RED_SIZE, 1,
     GLX_GREEN_SIZE, 1,
     GLX_BLUE_SIZE, 1,
-    GLX_DOUBLEBUFFER, // FIXMEIM - probably not now?
+//    GLX_DOUBLEBUFFER,  FIXMEIM - probably not needed now?
     None
 };
 
@@ -174,9 +174,9 @@ struct GLState {
     int fake_shareList;
 
     GloContext *context; // context (owned by this)
-    QGloSurface *current_qsurface;
-    QTAILQ_HEAD(, QGloSurface) qsurfaces;
-//    QGloSurface *qsurface[MAX_ASSOC_SIZE];
+    QGloSurface *current_qsurface; // current rendering surface/drawable
+    QTAILQ_HEAD(, QGloSurface) qsurfaces; // list of surfaces/drawables for
+                                          // this context
 
     void *vertexPointer;
     void *normalPointer;
@@ -262,11 +262,6 @@ typedef struct {
 
 static ProcessState processes[MAX_HANDLED_PROCESS];
 
-//ClientGLXDrawable get_association_serverdrawable_clientdrawable(
-//                GLState *state, GloSurface *serverdrawable);
-//GloSurface *get_association_clientdrawable_serverdrawable(
-//                GLState *state, ClientGLXDrawable clientdrawable);
-
 static inline QGloSurface *get_qsurface_from_client_drawable(GLState *state, ClientGLXDrawable client_drawable) {
     int i;
     QGloSurface *qsurface;
@@ -282,13 +277,14 @@ static inline QGloSurface *get_qsurface_from_client_drawable(GLState *state, Cli
     return NULL;
 }
 
+// This must always be called only on surfaces belonging to the current context
 static inline void render_surface(QGloSurface *qsurface, int stride, char *buffer)
 {
     if(qsurface->ready)
         glo_surface_getcontents(qsurface->surface, stride, buffer);
 }
 
-//FIXMEIM - is this always called on the current surface
+// This must always be called only on surfaces belonging to the current context
 static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
                                   int w, int h) {
     GLState *glstate = qsurface->glstate;
@@ -300,7 +296,7 @@ static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
     surface = glo_surface_create(w, h, glstate->context);
     qsurface->surface = surface;
 
-    glo_surface_destroy(old_surface); // FIXMEIM - should we check if not NULL?
+    glo_surface_destroy(old_surface);
 
     // Client doesnt know surface is new - need to MakeCurrent
     if(process->current_state == qsurface->glstate) {
@@ -309,7 +305,7 @@ static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
     else {
         fprintf(stderr, "Error: Surface is not current! %08x %08x\n",
         process->current_state, process->current_state->current_qsurface);
-//        glo_surface_makecurrent(0);
+        exit(1);
     }
 
     glstate->current_qsurface->ready = 1;
@@ -403,58 +399,7 @@ void unset_association_fakepbuffer_pbuffer(ProcessState *process,
 
 /* ---- */
 
-/*
-static inline GLoSurface *get_association_clientdrawable_serverdrawable(ProcessState *process, ClientGLXDrawable client_drawable) {
-    int i;
-    QGloSurface *qsurface;
-    for (i = 0; i < process->nb_states; i ++) {
-        if (process->glstates[i]->qsurface->client_drawable == client_drawable) {
-            qsurface = process->glstates[i]->qsurface;
-            break;
-        }
-    }
-    return qsurface->surface;
-}
-*/
-
-
-#if 0
-GloSurface *get_association_clientdrawable_serverdrawable(
-                GLState *state, ClientGLXDrawable clientdrawable)
-{
-    int i;
-
-    for (i = 0; i < MAX_ASSOC_SIZE &&
-                    state->association_clientdrawable_serverdrawable[i].key;
-                    i++)
-        if ((ClientGLXDrawable) state->
-                        association_clientdrawable_serverdrawable[i].key ==
-                        clientdrawable)
-            return (GloSurface*)state->
-                association_clientdrawable_serverdrawable[i].value;
-
-    return (GloSurface*) 0;
-}
-#endif
-#if 0
-ClientGLXDrawable get_association_serverdrawable_clientdrawable(
-                GLState *state, GloSurface *serverdrawable)
-{
-    int i;
-
-    for (i = 0; i < MAX_ASSOC_SIZE &&
-                    state->association_clientdrawable_serverdrawable[i].key;
-                    i ++)
-        if ((GloSurface*)state->
-                        association_clientdrawable_serverdrawable[i].value ==
-                        serverdrawable)
-            return (ClientGLXDrawable)
-                    state->association_clientdrawable_serverdrawable[i].key;
-
-    return NULL;
-}
-#endif
-
+/* Bind a qsurface to a context (GLState) */
 static void bind_qsurface(
                 GLState *state,
                 QGloSurface *qsurface)
@@ -466,8 +411,7 @@ static void bind_qsurface(
     state->current_qsurface = qsurface;
 }
 
-/* Lookup the current surface for 'state' for client_drawable */
-/* state must belong to process */
+/* Make the appropriate qsurface current for a given client_drawable */
 static int set_current_qsurface(
                  GLState *state,
                  ClientGLXDrawable client_drawable) {
@@ -488,6 +432,7 @@ static int set_current_qsurface(
     return 0;
 }
 
+/* ---- */
 
 static int is_gl_vendor_ati(Display *dpy)
 {
@@ -691,26 +636,6 @@ static void do_glClientActiveTextureARB(int texture)
     }
 }
 
-#ifdef CURSOR_TRICK
-static void do_glActiveTextureARB(int texture)
-{
-    GET_EXT_PTR_NO_FAIL(void, glActiveTextureARB, (int));
-
-    if (ptr_func_glActiveTextureARB) {
-        ptr_func_glActiveTextureARB(texture);
-    }
-}
-
-static void do_glUseProgramObjectARB(GLhandleARB programObj)
-{
-    GET_EXT_PTR_NO_FAIL(void, glUseProgramObjectARB, (GLhandleARB));
-
-    if (ptr_func_glUseProgramObjectARB) {
-        ptr_func_glUseProgramObjectARB(programObj);
-    }
-}
-#endif
-
 static void destroy_gl_state(GLState *state)
 {
     int i;
@@ -722,9 +647,6 @@ static void destroy_gl_state(GLState *state)
     }
     // FIXMEIM Free qsurface?
         
-    // FIXMEIM - should scan process struct and get rid of any otherwise
-    //           unused surfaces
-
     if (state->context)
       glo_context_destroy(state->context);
 
@@ -947,7 +869,7 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
         if(process->current_state->current_qsurface)
             glo_surface_makecurrent(process->current_state->current_qsurface->surface);
         else
-            glo_surface_makecurrent(0);
+            glo_surface_makecurrent(0); // FIXMEIM - should never happen
     }
 
     return (ProcessStruct *)process; // Cast is ok due to struct defn.
@@ -1123,29 +1045,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXCopyContext_func:
         {
-          fprintf(stderr, " glXCopyContext not supported\n");
-#if 0 //GW
-            int fake_src_ctxt = (int) args[1];
-            int fake_dst_ctxt = (int) args[2];
-            GLXContext src_ctxt;
-            GLXContext dst_ctxt;
-
-            if (display_function_call)
-                fprintf(stderr, "fake_src_ctxt=%i, fake_dst_ctxt=%i\n",
-                        fake_src_ctxt, fake_dst_ctxt);
-
-            if (!(src_ctxt = get_association_fakecontext_glxcontext(
-                                            process, fake_src_ctxt)))
-                fprintf(stderr, "invalid fake_src_ctxt (%i) !\n",
-                                fake_src_ctxt);
-            else
-                if (!(dst_ctxt = get_association_fakecontext_glxcontext(
-                                                process, fake_dst_ctxt))) {
-                fprintf(stderr, "invalid fake_dst_ctxt (%i) !\n",
-                                fake_dst_ctxt);
-            } else
-                glXCopyContext(dpy, src_ctxt, dst_ctxt, args[3]);
-#endif
+          fprintf(stderr, " glXCopyContext not supported (does anything use it?)\n");
             break;
         }
 
@@ -1267,38 +1167,15 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXSwapBuffers_func:
         {
+            // Does nothing - window data is copied via render_surface()
             break;
-#if 0
-// Not used anymore
-            ClientGLXDrawable client_drawable = to_drawable(args[1]);
-
-            if (display_function_call)
-                fprintf(stderr, "client_drawable=%p\n", client_drawable);
-
-            if (!process->current_state) {
-              fprintf(stderr, "!process->current_state\n");
-              break;
-            }
-
-
-            GLXDrawable drawable =
-                get_association_clientdrawable_serverdrawable(
-                    process->current_state, client_drawable);
-            if (!drawable) {
-                fprintf(stderr, "unknown client_drawable (%p) !\n",
-                        (void *) client_drawable);
-            } else {
-
-                glXSwapBuffers(dpy, drawable);
-            }
-            break;
-#endif
         }
     case glXIsDirect_func:
         {
-//            int fake_ctxt = (int) args[1];
+            // int fake_ctxt = (int) args[1];
 
-            // Does this go direct and skip the X server? We'll just say yes for now.
+            // Does this go direct and skip the X server? We'll just say
+            // yes for now.
             ret.c = True;
 
             break;
@@ -3267,8 +3144,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case glGetIntegerv_func:
         {
             glGetIntegerv(args[0], (int *) args[1]);
-//            fprintf(stderr, "glGetIntegerv(%x)=%d\n", (int) args[0],
-//                    *(int *) args[1]);
             break;
         }
 
