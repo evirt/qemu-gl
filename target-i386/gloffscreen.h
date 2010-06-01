@@ -61,7 +61,7 @@ extern void glo_init(void);
 extern void glo_kill(void);
 
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
-extern GloContext *glo_context_create(int formatFlags, GloSurface *shareLists);
+extern GloContext *glo_context_create(int formatFlags, GloContext *shareLists);
 
 /* Destroy a previouslu created OpenGL context */
 extern void glo_context_destroy(GloContext *context);
