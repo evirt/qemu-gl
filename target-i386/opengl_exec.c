@@ -155,14 +155,28 @@ typedef struct {
 
 #define MAX_CLIENT_STATE_STACK_SIZE 16
 
-typedef struct {
+typedef void *ClientGLXDrawable;
+
+typedef struct GLState GLState;
+
+typedef struct QGloSurface {
+  GLState *glstate;
+  GloSurface *surface;
+  ClientGLXDrawable *client_drawable;
+  int ready;
+  int ref;
+  QTAILQ_ENTRY(QGloSurface) next;
+} QGloSurface;
+
+struct GLState {
     int ref;
     int fake_ctxt;
     int fake_shareList;
 
     GloContext *context; // context (owned by this)
-    GloSurface *drawable; // current drawable set with MakeCurrent (*not* owned by this but by the assoc)
-    Assoc association_clientdrawable_serverdrawable[MAX_ASSOC_SIZE];
+    QGloSurface *current_qsurface;
+    QTAILQ_HEAD(, QGloSurface) qsurfaces;
+//    QGloSurface *qsurface[MAX_ASSOC_SIZE];
 
     void *vertexPointer;
     void *normalPointer;
@@ -220,12 +234,10 @@ typedef struct {
     RangeAllocator ownListAllocator;
     RangeAllocator *listAllocator;
 
-} GLState;
+};
 
 typedef struct {
     ProcessStruct p;
-
-//    int x, y, width, height;
 
     int next_available_context_number;
     int next_available_pbuffer_number;
@@ -250,64 +262,57 @@ typedef struct {
 
 static ProcessState processes[MAX_HANDLED_PROCESS];
 
-typedef void *ClientGLXDrawable;
-ClientGLXDrawable get_association_serverdrawable_clientdrawable(
-                GLState *state, GloSurface *serverdrawable);
-GloSurface *get_association_clientdrawable_serverdrawable(
-                GLState *state, ClientGLXDrawable clientdrawable);
+//ClientGLXDrawable get_association_serverdrawable_clientdrawable(
+//                GLState *state, GloSurface *serverdrawable);
+//GloSurface *get_association_clientdrawable_serverdrawable(
+//                GLState *state, ClientGLXDrawable clientdrawable);
 
-//FIXMEIM - can be simpler with a little pointer math.
-static inline GLState *get_glstate_from_surface(ProcessState *process, GloSurface *surface) {
+static inline QGloSurface *get_qsurface_from_client_drawable(GLState *state, ClientGLXDrawable client_drawable) {
     int i;
-    GLState *glstate = NULL;
-    for (i = 0; i < process->nb_states; i ++) {
-        if (process->glstates[i]->drawable == surface) {
-            glstate = process->glstates[i];
-            break;
-        }
+    QGloSurface *qsurface;
+
+    if(state->current_qsurface->client_drawable == client_drawable)
+        return state->current_qsurface;
+
+    QTAILQ_FOREACH(qsurface, &state->qsurfaces, next) {
+        if (qsurface->client_drawable == client_drawable)
+            return qsurface;
     }
-    return glstate;
+
+    return NULL;
 }
 
-static inline void render_surface(GloSurface *surface, int stride, char *buffer)
+static inline void render_surface(QGloSurface *qsurface, int stride, char *buffer)
 {
-    if(glo_surface_ready(surface))
-        glo_surface_getcontents(surface, stride, buffer);
+    if(qsurface->ready)
+        glo_surface_getcontents(qsurface->surface, stride, buffer);
 }
 
-static inline void resize_surface(ProcessState *process, GloSurface *surface,
+//FIXMEIM - is this always called on the current surface
+static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
                                   int w, int h) {
-    // if resized, reallocate. else...
-    ClientGLXDrawable client_drawable;
-    GLState *glstate = get_glstate_from_surface(process, surface);
-    GloSurface *old_surface = surface;
-
-    if(!glstate)
-        return;
+    GLState *glstate = qsurface->glstate;
+    GloSurface *old_surface = qsurface->surface;
+    GloSurface *surface;
 
     fprintf(stderr, "resize_start\n");
 
-    client_drawable =
-        get_association_serverdrawable_clientdrawable(glstate, old_surface);
-
     surface = glo_surface_create(w, h, glstate->context);
-
-    bind_clientdrawable_serverdrawable(glstate, client_drawable, surface);
-    glstate->drawable = surface;
+    qsurface->surface = surface;
 
     glo_surface_destroy(old_surface); // FIXMEIM - should we check if not NULL?
 
     // Client doesnt know surface is new - need to MakeCurrent
-    if(process->current_state == glstate) {
-        glo_surface_makecurrent(glstate->drawable);
+    if(process->current_state == qsurface->glstate) {
+        glo_surface_makecurrent(qsurface->surface);
     }
     else {
-        fprintf(stderr, "Surface is not current! %08x %08x\n",
-        process->current_state, process->current_state->drawable);
-        exit(1);
+        fprintf(stderr, "Error: Surface is not current! %08x %08x\n",
+        process->current_state, process->current_state->current_qsurface);
+//        glo_surface_makecurrent(0);
     }
 
-    glo_surface_set_ready(surface, 1);
+    glstate->current_qsurface->ready = 1;
     fprintf(stderr, "resize_done\n");
 }
 
@@ -397,6 +402,23 @@ void unset_association_fakepbuffer_pbuffer(ProcessState *process,
 }
 
 /* ---- */
+
+/*
+static inline GLoSurface *get_association_clientdrawable_serverdrawable(ProcessState *process, ClientGLXDrawable client_drawable) {
+    int i;
+    QGloSurface *qsurface;
+    for (i = 0; i < process->nb_states; i ++) {
+        if (process->glstates[i]->qsurface->client_drawable == client_drawable) {
+            qsurface = process->glstates[i]->qsurface;
+            break;
+        }
+    }
+    return qsurface->surface;
+}
+*/
+
+
+#if 0
 GloSurface *get_association_clientdrawable_serverdrawable(
                 GLState *state, ClientGLXDrawable clientdrawable)
 {
@@ -413,7 +435,8 @@ GloSurface *get_association_clientdrawable_serverdrawable(
 
     return (GloSurface*) 0;
 }
-
+#endif
+#if 0
 ClientGLXDrawable get_association_serverdrawable_clientdrawable(
                 GLState *state, GloSurface *serverdrawable)
 {
@@ -430,28 +453,41 @@ ClientGLXDrawable get_association_serverdrawable_clientdrawable(
 
     return NULL;
 }
+#endif
 
-void bind_clientdrawable_serverdrawable(
-                GLState *state, ClientGLXDrawable clientdrawable,
-                GloSurface *serverdrawable)
+static void bind_qsurface(
+                GLState *state,
+                QGloSurface *qsurface)
 {
-    int i;
+    qsurface->glstate = state;
 
-    for (i = 0; state->association_clientdrawable_serverdrawable[i].key;
-                    i ++)
-        if ((ClientGLXDrawable) state->
-                        association_clientdrawable_serverdrawable[i].key ==
-                        clientdrawable)
-            break;
+    QTAILQ_INSERT_HEAD(&state->qsurfaces, qsurface, next);
 
-    if (i < MAX_ASSOC_SIZE) {
-         state->association_clientdrawable_serverdrawable[i].key =
-                (void *) clientdrawable;
-         state->association_clientdrawable_serverdrawable[i].value =
-                (void *) serverdrawable;
-    } else
-        fprintf(stderr, "MAX_ASSOC_SIZE reached\n");
+    state->current_qsurface = qsurface;
 }
+
+/* Lookup the current surface for 'state' for client_drawable */
+/* state must belong to process */
+static int set_current_qsurface(
+                 GLState *state,
+                 ClientGLXDrawable client_drawable) {
+    QGloSurface *qsurface;
+
+    if(state->current_qsurface && state->current_qsurface->client_drawable == client_drawable)
+        return 1;
+
+    QTAILQ_FOREACH(qsurface, &state->qsurfaces, next) {
+        if(qsurface->client_drawable == client_drawable) {
+            state->current_qsurface = qsurface;
+            return 1;
+        }
+    }
+
+    state->current_qsurface = NULL;
+
+    return 0;
+}
+
 
 static int is_gl_vendor_ati(Display *dpy)
 {
@@ -678,14 +714,16 @@ static void do_glUseProgramObjectARB(GLhandleARB programObj)
 static void destroy_gl_state(GLState *state)
 {
     int i;
+    QGloSurface *qsurface;
 
-    for (i = 0; i < MAX_ASSOC_SIZE && state->
-                    association_clientdrawable_serverdrawable[i].key; i ++) {
-        GloSurface *surface = (GloSurface *) state->
-            association_clientdrawable_serverdrawable[i].value;
-
-        glo_surface_destroy(surface);
+    QTAILQ_FOREACH(qsurface, &state->qsurfaces, next) {
+        glo_surface_destroy(qsurface->surface);
+        QTAILQ_REMOVE(&state->qsurfaces, qsurface, next);
     }
+        
+    // FIXMEIM - should scan process struct and get rid of any otherwise
+    //           unused surfaces
+
     if (state->context)
       glo_context_destroy(state->context);
 
@@ -905,7 +943,10 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
 //        fprintf(stderr, "Ctx switch: pid: %d    %08x %08x %08x\n", pid,
 //                process->dpy, process->current_state->drawable,
 //                process->current_state->context);
-        glo_surface_makecurrent(process->current_state->drawable);
+        if(process->current_state->current_qsurface)
+            glo_surface_makecurrent(process->current_state->current_qsurface->surface);
+        else
+            glo_surface_makecurrent(0);
     }
 
     return (ProcessStruct *)process; // Cast is ok due to struct defn.
@@ -938,11 +979,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case _resize_surface_func:
         {
             ClientGLXDrawable client_drawable = to_drawable(args[0]);
-            GloSurface *surface =
-                    get_association_clientdrawable_serverdrawable(
-                        process->current_state, client_drawable);
+            QGloSurface *qsurface = get_qsurface_from_client_drawable(
+                                        process->current_state, client_drawable);
 
-            resize_surface(process, surface, (int)args[1], (int)args[2]);
+            // We have to assume the current context here
+            // since we assume that a drawable must belong to a specific context
+            resize_surface(process, qsurface, (int)args[1], (int)args[2]);
             break;
 
         }
@@ -950,13 +992,14 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case _render_surface_func:
         {
             ClientGLXDrawable client_drawable = to_drawable(args[0]);
-            GloSurface *surface =
-                    get_association_clientdrawable_serverdrawable(
-                        process->current_state, client_drawable);
+            QGloSurface *qsurface = get_qsurface_from_client_drawable(
+                                        process->current_state, client_drawable);
             int stride = (int)args[1];
             char *render_buffer = (char*)args[2];
 
-            render_surface(surface, stride, render_buffer);
+            // We have to assume the current context here
+            // since we assume that a drawable must belong to a specific context
+            render_surface(qsurface, stride, render_buffer);
             break;
 
         }
@@ -1045,6 +1088,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             state->context = glo_context_create(formatFlags,
                                                 shareListState?shareListState->context:0);
 
+            fprintf(stderr, " created context %08x for %08x\n", state, fake_ctxt);
             break;
         }
 
@@ -1182,47 +1226,44 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXMakeCurrent_func:
         {
-            int i;
             ClientGLXDrawable client_drawable = to_drawable(args[1]);
             int fake_ctxt = (int) args[2];
             GLState *glstate = NULL;
 
-            if (display_function_call)
-                fprintf(stderr, "client_drawable=%p fake_ctx=%d\n",
-                        (void *) client_drawable, fake_ctxt);
+            fprintf(stderr, "Makecurrent: fake_ctx=%d client_drawable=%08x\n", fake_ctxt, client_drawable);
 
             if (client_drawable == 0 && fake_ctxt == 0) {
                 /* Release context */
+                if(process->current_state->current_qsurface)
+                    process->current_state->current_qsurface->ref--;
                 process->current_state = &process->default_state;
 
+                fprintf(stderr, " --release\n");
                 glo_surface_makecurrent(0);
             } else { /* Lookup GLState struct for this context */
                 glstate = get_glstate_for_fake_ctxt(process, fake_ctxt);
                 if (!glstate) {
-                    fprintf(stderr, "invalid fake_ctxt (%d)!\n", fake_ctxt);
+                    fprintf(stderr, " --invalid fake_ctxt (%d)!\n", fake_ctxt);
                 } else {
-                     //FIXMEIM - the order of lookup seems wrong here. might be faster to lookup in a different order.
-                    /* If the host drawable is a pbuffer, lookup the associated
-                       context */
-                    glstate->drawable = get_association_clientdrawable_serverdrawable(
-                                                            glstate, client_drawable);
-                    if (!glstate->drawable) {
-                       /* else, create an ordinary drawable */
-                       GloSurface *surface;
-                       surface = glo_surface_create(4, 4, glstate->context);
+                    if(!set_current_qsurface(glstate, client_drawable)) {
+                       // If there is no surface, create one.
+                       QGloSurface *qsurface = calloc(1, sizeof(QGloSurface));
+                       qsurface->surface = glo_surface_create(4, 4,
+                                                              glstate->context);
+                       qsurface->client_drawable = client_drawable;
+                       qsurface->ref = 1;
 
-                       fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)glstate->drawable, (unsigned long int)client_drawable);
+                       bind_qsurface(glstate, qsurface);
+                       fprintf(stderr, " --Client drawable not found, create new surface: %16x %16lx\n", (unsigned int)qsurface, (unsigned long int)client_drawable);
 
-                       bind_clientdrawable_serverdrawable(glstate,
-                                       client_drawable, surface);
-
-                       glstate->drawable = surface;
-
+                    }
+                    else {
+                       fprintf(stderr, " --Client drawable found, using surface: %16x %16lx\n", (unsigned int)glstate->current_qsurface, (unsigned long int)client_drawable);
                     }
 
                     process->current_state = glstate;
 
-                    ret.i = glo_surface_makecurrent(glstate->drawable);
+                    ret.i = glo_surface_makecurrent(glstate->current_qsurface->surface);
                 }
             }
             break;
@@ -1231,6 +1272,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case glXSwapBuffers_func:
         {
             break;
+#if 0
+// Not used anymore
             ClientGLXDrawable client_drawable = to_drawable(args[1]);
 
             if (display_function_call)
@@ -1253,11 +1296,11 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 glXSwapBuffers(dpy, drawable);
             }
             break;
+#endif
         }
-
     case glXIsDirect_func:
         {
-            int fake_ctxt = (int) args[1];
+//            int fake_ctxt = (int) args[1];
 
             // Does this go direct and skip the X server? We'll just say yes for now.
             ret.c = True;
