@@ -6871,6 +6871,7 @@ GLAPI void APIENTRY glGenFramebuffersEXT (GLsizei, GLuint *);
 GLAPI GLenum APIENTRY glCheckFramebufferStatusEXT (GLenum);
 GLAPI void APIENTRY glFramebufferTexture1DEXT (GLenum, GLenum, GLenum, GLuint, GLint);
 GLAPI void APIENTRY glFramebufferTexture2DEXT (GLenum, GLenum, GLenum, GLuint, GLint);
+GLAPI void APIENTRY glFramebufferTexture2D (GLenum, GLenum, GLenum, GLuint, GLint);
 GLAPI void APIENTRY glFramebufferTexture3DEXT (GLenum, GLenum, GLenum, GLuint, GLint, GLint);
 GLAPI void APIENTRY glFramebufferRenderbufferEXT (GLenum, GLenum, GLenum, GLuint);
 GLAPI void APIENTRY glGetFramebufferAttachmentParameterivEXT (GLenum, GLenum, GLenum, GLint *);
