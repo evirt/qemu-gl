@@ -1695,9 +1695,10 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXGetProcAddress_fake_func:
         {
-            if (display_function_call)
-                fprintf(stderr, "%s\n", (char *) args[0]);
+//            if (display_function_call)
+                fprintf(stderr, "glXGetProcAddress %s  ", (char *) args[0]);
             ret.i = glXGetProcAddressARB((const GLubyte *) args[0]) != NULL;
+                fprintf(stderr, " == %08x\n", ret.i);
             break;
         }
 
@@ -1854,6 +1855,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             break;
         }
 
+    case glFramebufferTexture2D_func:
+        fprintf(stderr, "wooooot!\n");
     case glFramebufferTexture2DEXT_func:
         {
             GET_EXT_PTR(void, glFramebufferTexture2DEXT,
