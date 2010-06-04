@@ -555,7 +555,7 @@ static int virtio_gl_init_pci(PCIDevice *pci_dev)
                     PCI_DEVICE_ID_VIRTIO_GL,
                     PCI_CLASS_OTHERS,
                     0x00);
-    proxy->host_features |= 1 << VIRTIO_RING_F_INDIRECT_DESC;
+//    proxy->host_features |= 1 << VIRTIO_RING_F_INDIRECT_DESC;
 
     return 0;
 }
@@ -600,10 +600,6 @@ static PCIDeviceInfo virtio_info[] = {
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_balloon_init_pci,
         .exit      = virtio_exit_pci,
-        .qdev.props = (Property[]) {
-            DEFINE_VIRTIO_COMMON_FEATURES(VirtIOPCIProxy, host_features),
-            DEFINE_PROP_END_OF_LIST(),
-        },
         .qdev.reset = virtio_pci_reset,
     },{
 	.qdev.name = "virtio-gl-pci",
