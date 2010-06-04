@@ -1241,8 +1241,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 			if(*attrib_list == GLX_DOUBLEBUFFER) {
 				fprintf(stderr, "Squashing doublebuffered visual");
 				*(attrib_list+1) = False;
-				attrib_list += 2;
 			}
+			attrib_list += 2;
 		}
                 GLXFBConfig *fbconfigs =
                     ptr_func_glXChooseFBConfig(dpy, args[1], (int *) args[2],
