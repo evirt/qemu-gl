@@ -129,7 +129,6 @@ static XVisualInfo *get_default_visual(Display *dpy)
 
     if (vis)
         return vis;
-    fprintf(stderr, "get_default_visual\n");
     /* if (vis == NULL) vis = glXChooseVisual(dpy, 0,
      * (int*)defaultAttribList); */
     theTemplate.screen = 0;
@@ -946,15 +945,18 @@ void _create_context(ProcessState *process, GLXContext ctxt, int fake_ctxt,
     process->nb_states++;
 }
 
+#undef DEBUG_DISCONNECT
 void do_disconnect(ProcessState *process)
 {
     int i;
     Display *dpy = process->dpy;
 
+#ifdef DEBUG_DISCONNECT
     if(!process->p.wordsize)
         fprintf(stderr, "Likely died prior to init: pid %d\n", process->p.process_id);
     else 
         fprintf(stderr, "disconnect GL process: %d\n", process->p.process_id);
+#endif
 
     glXMakeCurrent(dpy, 0, NULL);
 
@@ -962,10 +964,12 @@ void do_disconnect(ProcessState *process)
                     process->association_fakecontext_glxcontext[i].key; i ++) {
         GLXContext ctxt = process->association_fakecontext_glxcontext[i].value;
 
+#ifdef DEBUG_DISCONNECT
         fprintf(stderr, "Destroy context corresponding to fake_context"
                         " = %ld (%08x)\n", (long) process->
                         association_fakecontext_glxcontext[i].key,
 			process->association_fakecontext_glxcontext[i].value);
+#endif
         glXDestroyContext(dpy, ctxt);
     }
 
@@ -976,9 +980,11 @@ void do_disconnect(ProcessState *process)
         GLXPbuffer pbuffer = (GLXPbuffer)
                 process->association_fakepbuffer_pbuffer[i].value;
 
+#ifdef DEBUG_DISCONNECT
         fprintf(stderr, "Destroy pbuffer corresponding to fake_pbuffer"
                         " = %ld\n", (long) process->
                         association_fakepbuffer_pbuffer[i].key);
+#endif
         if (!is_gl_vendor_ati(dpy))
             ptr_func_glXDestroyPbuffer(dpy, pbuffer);
     }
@@ -988,9 +994,11 @@ void do_disconnect(ProcessState *process)
         Window win = (Window) process->
                 association_clientdrawable_serverdrawable[i].value;
 
+#ifdef DEBUG_DISCONNECT
         fprintf(stderr, "Destroy window %x corresponding to client_drawable "
                         "= %p\n", (int) win, process->
                         association_clientdrawable_serverdrawable[i].key);
+#endif
 
         XDestroyWindow(dpy, win);
 
@@ -1291,7 +1299,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             GLXDrawable drawable =
                     get_association_clientdrawable_serverdrawable(
                                     process, client_drawable);
-			fprintf (stderr, "Go to get_imagedata!\n");
             if (drawable) {
 				GetDrawableImage (process, dpy, drawable, (void *)args[1]);
 			}
@@ -1376,7 +1383,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 ctxt = glXCreateContext(dpy, vis, shareList, args[3]);
                 vis->visualid = saved_visualid;
             }
-fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
             if (ctxt) {
                 int fake_ctxt = ++process->next_available_context_number;
@@ -1569,7 +1575,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
                                 vis = get_default_visual(dpy);
                             host_drawable = create_window(dpy, vis);
     
-                            fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)host_drawable, (unsigned long int)client_drawable);
+                            //fprintf(stderr, "Create drawable: %16x %16lx\n", (unsigned int)host_drawable, (unsigned long int)client_drawable);
 
                             set_association_clientdrawable_serverdrawable(process,
                                             client_drawable, host_drawable);
@@ -1833,7 +1839,7 @@ fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
             if (fbconfig) {
                 GLXPbuffer pbuffer =
                     ptr_func_glXCreatePbuffer(dpy, fbconfig, (int *) args[2]);
-                fprintf(stderr, "glXCreatePbuffer --> %x\n", (int) pbuffer);
+                //fprintf(stderr, "glXCreatePbuffer --> %x\n", (int) pbuffer);
                 if (pbuffer) {
                     ClientGLXDrawable fake_pbuffer = to_drawable(
                                     ++ process->next_available_pbuffer_number);

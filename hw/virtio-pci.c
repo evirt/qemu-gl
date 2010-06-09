@@ -548,7 +548,6 @@ static int virtio_gl_init_pci(PCIDevice *pci_dev)
     VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
     VirtIODevice *vdev;
 
-    fprintf(stderr, "gl_init_pci\n");
     vdev = virtio_gl_init(&pci_dev->qdev);
     virtio_init_pci(proxy, vdev,
                     PCI_VENDOR_ID_REDHAT_QUMRANET,
