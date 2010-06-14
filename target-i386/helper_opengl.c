@@ -28,14 +28,18 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <stdio.h>
-
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
+/* GW: dyngen-exec.h defines its own version of stuff that is in stdio.h - 
+   only it misses things and is mildly different to stdio \o/. Hence
+   don't include stdio and make our own defines. */
+//#include <stdio.h>
+extern struct FILE *stderr;		/* Standard error output stream.  */
 
 #include "opengl_func.h"
 #include "opengl_process.h"
 #include "opengl_exec.h"
+
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
 
 #include "kvm.h"
 
