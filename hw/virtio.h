@@ -175,9 +175,6 @@ VirtIODevice *virtio_blk_init(DeviceState *dev, DriveInfo *dinfo);
 VirtIODevice *virtio_net_init(DeviceState *dev, NICConf *conf);
 VirtIODevice *virtio_console_init(DeviceState *dev);
 VirtIODevice *virtio_balloon_init(DeviceState *dev);
-#ifdef CONFIG_LINUX
-VirtIODevice *virtio_9p_init(DeviceState *dev, V9fsConf *conf);
-#endif
 VirtIODevice *virtio_gl_init(DeviceState *dev);
 
 void virtio_net_exit(VirtIODevice *vdev);
