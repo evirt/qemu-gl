@@ -2416,6 +2416,7 @@ case "$target_arch2" in
     fi
     if test "$gl" = "yes" -a "$target_softmmu" = "yes" ; then
       echo "CONFIG_GL=y" >> $config_target_mak
+      cflags="-DTARGET_OPENGL_OK $cflags "
     fi
 esac
 case "$target_arch2" in
