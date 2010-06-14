@@ -4881,11 +4881,6 @@ int main(int argc, char **argv, char **envp)
 #endif
     CPUState *env;
     int show_vnc_port = 0;
-    int defconfig = 1;
-//    extern int _Xdebug;
-//    _Xdebug=1;
-
-    error_set_progname(argv[0]);
 
     init_clocks();
 
