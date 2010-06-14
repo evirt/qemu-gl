@@ -36,7 +36,6 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 #define GL_GLEXT_PROTOTYPES
 #define GLX_GLXEXT_PROTOTYPES
 #include <mesa_gl.h>
-#include <mesa_glx.h>
 
 #include "opengl_func.h"
 #include "mesa_mipmap.h"
@@ -45,6 +44,12 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 #include "gloffscreen.h"
 
 
+// FIXME
+typedef int Bool;
+typedef int XID;
+typedef struct XVisualInfo XVisualInfo;
+typedef struct Display Display;
+// FIXME
 
 void *qemu_malloc(size_t size);
 void *qemu_realloc(void *ptr, size_t size);
@@ -112,16 +117,7 @@ static void *get_glu_ptr(const char *name)
 int display_function_call = 0;
 extern int kill_process;
 
-static const int defaultAttribList[] = {
-    GLX_RGBA,
-    GLX_RED_SIZE, 1,
-    GLX_GREEN_SIZE, 1,
-    GLX_BLUE_SIZE, 1,
-//    GLX_DOUBLEBUFFER,  FIXMEIM - probably not needed now?
-    None
-};
-
-static XVisualInfo *get_default_visual(Display *dpy)
+static XVisualInfo *get_default_visual()
 {
     static XVisualInfo *vis = NULL;
     XVisualInfo theTemplate;
@@ -130,8 +126,6 @@ static XVisualInfo *get_default_visual(Display *dpy)
     if (vis)
         return vis;
     fprintf(stderr, "get_default_visual\n");
-    /* if (vis == NULL) vis = glXChooseVisual(dpy, 0,
-     * (int*)defaultAttribList); */
     theTemplate.screen = 0;
     vis = XGetVisualInfo(dpy, VisualScreenMask, &theTemplate, &numVisuals);
 
@@ -445,21 +439,6 @@ static int set_current_qsurface(
     return 0;
 }
 
-/* ---- */
-
-static int is_gl_vendor_ati(Display *dpy)
-{
-    static int is_gl_vendor_ati_flag = 0;
-    static int has_init = 0;
-
-    if (has_init == 0) {
-        has_init = 1;
-        is_gl_vendor_ati_flag =
-            (strncmp(glXGetClientString(dpy, GLX_VENDOR), "ATI", 3) == 0);
-    }
-    return is_gl_vendor_ati_flag;
-}
-
 static int get_server_texture(ProcessState *process,
                               unsigned int client_texture)
 {
@@ -614,8 +593,7 @@ static int glXChooseVisualFunc(Display *dpy, const int *_attribList)
     return (visInfo) ? visInfo->visualid : 0;
 }
 
-static XVisualInfo *get_visual_info_from_visual_id(Display *dpy,
-                                                   int visualid)
+static XVisualInfo *get_visual_info_from_visual_id(int visualid)
 {
     int i, n;
     XVisualInfo template;
@@ -812,15 +790,13 @@ GLState *get_glstate_for_fake_ctxt(ProcessState *process, int fake_ctxt)
 void disconnect(ProcessState *process)
 {
     int i;
-    Display *dpy = glo_get_dpy();
 
     GET_EXT_PTR(void, glXDestroyPbuffer, (Display *, GLXPbuffer));
     for (i = 0; i < MAX_ASSOC_SIZE &&
                     process->association_fakepbuffer_pbuffer[i].key; i ++) {
         GLXPbuffer pbuffer = (GLXPbuffer)
                 process->association_fakepbuffer_pbuffer[i].value;
-        if (!is_gl_vendor_ati(dpy))
-            ptr_func_glXDestroyPbuffer(dpy, pbuffer);
+        ptr_func_glXDestroyPbuffer(dpy, pbuffer);
     }
 
     for (i = 0; i < process->nb_states; i++) {
@@ -891,7 +867,6 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
 int do_function_call(ProcessState *process, int func_number, arg_t *args, char *ret_string)
 {
     union gl_ret_type ret;
-    Display *dpy = glo_get_dpy();
 
     Signature *signature = (Signature *) tab_opengl_calls[func_number];
     int ret_type = signature->ret_type;
@@ -1009,7 +984,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         fake_shareList);
 
             GLState *shareListState = get_glstate_for_fake_ctxt(process, fake_shareList);
-            XVisualInfo *vis = get_visual_info_from_visual_id(dpy, visualid);
+            XVisualInfo *vis = get_visual_info_from_visual_id(visualid);
 
             int fake_ctxt = ++process->next_available_context_number;
 
@@ -1211,9 +1186,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             XVisualInfo *vis = NULL;
 
             if (visualid)
-                vis = get_visual_info_from_visual_id(dpy, visualid);
+                vis = get_visual_info_from_visual_id(visualid);
             if (vis == NULL)
-                vis = get_default_visual(dpy);
+                vis = get_default_visual();
             ret.i = glXGetConfig(dpy, vis, args[2], (int *) args[3]);
             break;
         }
@@ -1229,9 +1204,10 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int *res = (int *) args[5];
 
             if (visualid)
-                vis = get_visual_info_from_visual_id(dpy, visualid);
+                vis = get_visual_info_from_visual_id(visualid);
             if (vis == NULL)
-                vis = get_default_visual(dpy);
+                vis = get_default_visual();
+
 
             for (i = 0; i < n; i++) {
                 res[i] = glXGetConfig(dpy, vis, attribs[i], &values[i]);
