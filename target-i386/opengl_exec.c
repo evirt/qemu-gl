@@ -24,10 +24,14 @@
  * THE SOFTWARE.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+/* GW: dyngen-exec.h defines its own version of stuff that is in stdio.h - 
+   only it misses things and is mildly different to stdio \o/. Hence
+   don't include stdio and make our own defines. */
+//#include <stdio.h>
+extern struct FILE *stderr;		/* Standard error output stream.  */
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -40,8 +44,13 @@
 #include "opengl_func.h"
 #include "mesa_mipmap.h"
 #include "opengl_process.h"
+
+
+
 #include "opengl_utils.h"
 #include "gloffscreen.h"
+
+
 
 void *qemu_malloc(size_t size);
 void *qemu_realloc(void *ptr, size_t size);
