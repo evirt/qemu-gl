@@ -263,7 +263,6 @@ typedef struct {
 static ProcessState processes[MAX_HANDLED_PROCESS];
 
 static inline QGloSurface *get_qsurface_from_client_drawable(GLState *state, ClientGLXDrawable client_drawable) {
-    int i;
     QGloSurface *qsurface;
 
     if(state->current_qsurface->client_drawable == client_drawable)
@@ -278,10 +277,21 @@ static inline QGloSurface *get_qsurface_from_client_drawable(GLState *state, Cli
 }
 
 // This must always be called only on surfaces belonging to the current context
-static inline void render_surface(QGloSurface *qsurface, int stride, char *buffer)
+static inline void render_surface(QGloSurface *qsurface, int bpp, int stride, char *buffer)
 {
-    if(qsurface->ready)
-        glo_surface_getcontents(qsurface->surface, stride, buffer);
+    int w, h, x, y, type;
+    if(!qsurface->ready)
+	return;
+
+    glo_surface_get_size(qsurface->surface, &w, &h);
+//    for(x = 0 ; x < w ; x++)
+//	for(y = 0 ; y < h ; y++){
+//		char *p = buffer + y*stride + x*3;
+//		int *pixel = (int*)p;
+//		*pixel = (int)buffer;
+//	}
+
+        glo_surface_getcontents(qsurface->surface, stride, bpp, buffer);
 }
 
 // This must always be called only on surfaces belonging to the current context
@@ -645,9 +655,10 @@ static void destroy_gl_state(GLState *state)
         glo_surface_destroy(qsurface->surface);
         QTAILQ_REMOVE(&state->qsurfaces, qsurface, next);
     }
+// FIXMEIM free?
         
-    if (state->context)
-      glo_context_destroy(state->context);
+//    if (state->context)
+//      glo_context_destroy(state->context);
 
     if (state->vertexPointer)
         qemu_free(state->vertexPointer);
@@ -889,10 +900,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 tab_opengl_calls_name[func_number]);
     }
 
+#if 0
     if(func_number != glXSwapBuffers_func &&
        func_number != glXMakeCurrent_func && 1/*tab_opengl_calls_name[func_number][2] == 'X'*/)
 	fprintf(stderr, "[%d]> %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
+#endif
 
     switch (func_number) {
     case -1:
@@ -916,12 +929,15 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             ClientGLXDrawable client_drawable = to_drawable(args[0]);
             QGloSurface *qsurface = get_qsurface_from_client_drawable(
                                         process->current_state, client_drawable);
-            int stride = (int)args[1];
-            char *render_buffer = (char*)args[2];
+            int bpp    = (int)args[1];
+            int stride = (int)args[2];
+            char *render_buffer = (char*)args[3];
+
+//            fprintf(stderr, "win: %08x stride: %d buf: %08x cl_dr: %08x qsurf: %08x\n", args[0], args[1], args[2], client_drawable, qsurface);
 
             // We have to assume the current context here
             // since we assume that a drawable must belong to a specific context
-            render_surface(qsurface, stride, render_buffer);
+            render_surface(qsurface, bpp, stride, render_buffer);
             break;
 
         }
@@ -1130,7 +1146,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int fake_ctxt = (int) args[2];
             GLState *glstate = NULL;
 
-            fprintf(stderr, "Makecurrent: fake_ctx=%d client_drawable=%08x\n", fake_ctxt, client_drawable);
+//            fprintf(stderr, "Makecurrent: fake_ctx=%d client_drawable=%08x\n", fake_ctxt, client_drawable);
 
             if (client_drawable == 0 && fake_ctxt == 0) {
                 /* Release context */
@@ -1138,7 +1154,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                     process->current_state->current_qsurface->ref--;
                 process->current_state = &process->default_state;
 
-                fprintf(stderr, " --release\n");
+//                fprintf(stderr, " --release\n");
                 glo_surface_makecurrent(0);
             } else { /* Lookup GLState struct for this context */
                 glstate = get_glstate_for_fake_ctxt(process, fake_ctxt);
@@ -1154,11 +1170,11 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                        qsurface->ref = 1;
 
                        bind_qsurface(glstate, qsurface);
-                       fprintf(stderr, " --Client drawable not found, create new surface: %16x %16lx\n", (unsigned int)qsurface, (unsigned long int)client_drawable);
+//                       fprintf(stderr, " --Client drawable not found, create new surface: %16x %16lx\n", (unsigned int)qsurface, (unsigned long int)client_drawable);
 
                     }
                     else {
-                       fprintf(stderr, " --Client drawable found, using surface: %16x %16lx\n", (unsigned int)glstate->current_qsurface, (unsigned long int)client_drawable);
+//                       fprintf(stderr, " --Client drawable found, using surface: %16x %16lx\n", (unsigned int)glstate->current_qsurface, (unsigned long int)client_drawable);
                     }
 
                     process->current_state = glstate;
@@ -1243,7 +1259,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 int *attrib_list = (int *) args[2];
 		while(*attrib_list != None) {
 			if(*attrib_list == GLX_DOUBLEBUFFER) {
-				fprintf(stderr, "Squashing doublebuffered visual");
+				fprintf(stderr, "Squashing doublebuffered visual\n");
 				*(attrib_list+1) = False;
 			}
 			attrib_list += 2;

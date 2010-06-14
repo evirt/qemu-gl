@@ -128,10 +128,12 @@ GloContext *glo_context_create(int formatFlags, GloSurface *shareLists) {
   context->fbConfig = fbConfigs[0];
 
   /* Create a GLX context for OpenGL rendering */
+  //FIXMEIM - always want alpha?
   context->context = glXCreateNewContext( glo.dpy, context->fbConfig,
                                           GLX_RGBA_TYPE,
                                           shareLists ? shareLists->context->context : NULL,
                                           True );
+  fprintf(stderr, "glocontext_create: %08x\n", context->context);
   if (!context->context) {
     printf( "glXCreateNewContext failed\n" );
     exit( EXIT_FAILURE );
@@ -144,6 +146,7 @@ GloContext *glo_context_create(int formatFlags, GloSurface *shareLists) {
 void glo_context_destroy(GloContext *context) {
   if (!context) return;
   // TODO: check for GloSurfaces using this?
+  fprintf(stderr, "glocontext_destroy: %08x\n", context->context);
   glXDestroyContext( glo.dpy, context->context);
   free(context);
 }
@@ -157,6 +160,7 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
 
     if (!context) return 0;
 
+  fprintf(stderr, "glo_surface_create: %08x\n", context->context);
     surface = (GloSurface*)malloc(sizeof(GloSurface));
     memset(surface, 0, sizeof(GloSurface));
     surface->width = width;
@@ -196,8 +200,10 @@ int glo_surface_makecurrent(GloSurface *surface) {
       glo_init();
 
     if (surface) {
+  fprintf(stderr, "glo_surface_mcurr: %08x\n", surface->context->context);
       ret = glXMakeCurrent(glo.dpy, surface->glxPixmap, surface->context->context);
     } else {
+  fprintf(stderr, "glo_surface_mcurr: NULL\n");
       ret = glXMakeCurrent(glo.dpy, 0, NULL);
     }
 
@@ -205,7 +211,7 @@ int glo_surface_makecurrent(GloSurface *surface) {
 }
 
 /* Get the contents of the given surface */
-void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
+void glo_surface_getcontents(GloSurface *surface, int stride, int type, void *data) {
     if (!surface) return;
 //#define GETCONTENTS_INDIVIDUAL true
 #if 1
@@ -216,6 +222,11 @@ void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
 //    int rowsize = surface->width*bpp;
     int glFormat, glType;
     glo_flags_get_readpixel_type(surface->context->formatFlags, &glFormat, &glType);
+    if(type == 32) // FIXMEIM HACK!!!!
+      glFormat = GL_BGRA;
+    else
+      glFormat = GL_BGR;
+
 #ifdef GETCONTENTS_INDIVIDUAL
     GLubyte *b = (GLubyte *)data;
     int irow;
@@ -239,7 +250,7 @@ void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
         b += stride;
         c -= stride;
     }
-//    free(tmp);
+    free(tmp);
 //    {
 //        FILE *d = fopen("dbg.rgb", "wb");
 //	fwrite(b, surface->width*4, surface->height, d);

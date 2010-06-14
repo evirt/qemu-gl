@@ -297,14 +297,14 @@ static const int _init32_signature[] =
 static const int _init64_signature[] =
     { TYPE_NONE, 1, 2, TYPE_INT, TYPE_OUT_1INT };
 
-static const int _changeWindowState_signature[] =
-    { TYPE_NONE, 0, 2, TYPE_INT, TYPE_INT };
+//static const int _changeWindowState_signature[] =
+//    { TYPE_NONE, 0, 2, TYPE_INT, TYPE_INT };
 
 static const int _resize_surface_signature[] =
     {TYPE_NONE, 0, 3, TYPE_INT, TYPE_INT, TYPE_INT};
 
 static const int _render_surface_signature[] =
-    {TYPE_NONE, 1, 3, TYPE_INT, TYPE_INT, TYPE_OUT_ARRAY_CHAR};
+    {TYPE_NONE, 1, 4, TYPE_INT, TYPE_INT, TYPE_INT, TYPE_OUT_ARRAY_CHAR};
 
 /* XVisualInfo* glXChooseVisual( Display *dpy, int screen, int *attribList ) */
 static const int glXChooseVisual_signature[] =
