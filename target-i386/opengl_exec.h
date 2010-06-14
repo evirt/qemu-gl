@@ -1,3 +1,5 @@
+#include <sys/types.h>
+
 extern void init_process_tab(void);
 extern void disconnect(ProcessStruct *process);
 extern ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context);
