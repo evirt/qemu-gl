@@ -543,22 +543,6 @@ static int virtio_balloon_init_pci(PCIDevice *pci_dev)
     return 0;
 }
 
-#ifdef CONFIG_LINUX
-static int virtio_9p_init_pci(PCIDevice *pci_dev)
-{
-    VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
-    VirtIODevice *vdev;
-    vdev = virtio_9p_init(&pci_dev->qdev, &proxy->fsconf);
-    virtio_init_pci(proxy, vdev,
-                    PCI_VENDOR_ID_REDHAT_QUMRANET,
-                    0x1009,
-                    0x2,
-                    0x00);
-
-    return 0;
-}
-#endif
-
 static int virtio_gl_init_pci(PCIDevice *pci_dev)
 {
     VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
@@ -570,7 +554,7 @@ static int virtio_gl_init_pci(PCIDevice *pci_dev)
                     PCI_DEVICE_ID_VIRTIO_GL,
                     PCI_CLASS_OTHERS,
                     0x00);
-    proxy->host_features |= 1 << VIRTIO_RING_F_INDIRECT_DESC;
+    // proxy->host_features |= 1 << VIRTIO_RING_F_INDIRECT_DESC; // FIXME not in stable-0.12 yet?
 
     return 0;
 }
@@ -617,20 +601,6 @@ static PCIDeviceInfo virtio_info[] = {
         .exit      = virtio_exit_pci,
         .qdev.reset = virtio_pci_reset,
     },{
-<<<<<<< HEAD
-=======
-#ifdef CONFIG_LINUX
-        .qdev.name = "virtio-9p-pci",
-        .qdev.size = sizeof(VirtIOPCIProxy),
-        .init      = virtio_9p_init_pci,
-        .qdev.props = (Property[]) {
-            DEFINE_VIRTIO_COMMON_FEATURES(VirtIOPCIProxy, host_features),
-            DEFINE_PROP_STRING("mount_tag", VirtIOPCIProxy, fsconf.tag),
-            DEFINE_PROP_STRING("fsdev", VirtIOPCIProxy, fsconf.fsdev_id),
-            DEFINE_PROP_END_OF_LIST(),
-        },
-    }, {
-#endif
 	.qdev.name = "virtio-gl-pci",
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_gl_init_pci,
@@ -640,7 +610,6 @@ static PCIDeviceInfo virtio_info[] = {
         },
         .qdev.reset = virtio_pci_reset,
     },{
->>>>>>> Add virtio OpenGL transport
         /* end of list */
     }
 };

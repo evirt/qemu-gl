@@ -89,7 +89,8 @@ done:
     }
 }
 
-static uint32_t virtio_gl_get_features(VirtIODevice *vdev, uint32_t f)
+
+static uint32_t virtio_gl_get_features(VirtIODevice *vdev/*, uint32_t f*/)
 {
     return 0;
 }

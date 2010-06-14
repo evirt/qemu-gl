@@ -216,6 +216,7 @@ curses=""
 docs=""
 fdt=""
 kvm=""
+gl=""
 nptl=""
 sdl=""
 sparse="no"
@@ -518,6 +519,10 @@ for opt do
   ;;
   --enable-kvm) kvm="yes"
   ;;
+  --disable-gl) gl="no"
+  ;;
+  --enable-gl) gl="yes"
+  ;;
   --enable-profiler) profiler="yes"
   ;;
   --enable-cocoa)
@@ -722,6 +727,8 @@ echo "  --disable-bluez          disable bluez stack connectivity"
 echo "  --enable-bluez           enable bluez stack connectivity"
 echo "  --disable-kvm            disable KVM acceleration support"
 echo "  --enable-kvm             enable KVM acceleration support"
+echo "  --disable-gl             disable GL acceleration support"
+echo "  --enable-gl              enable GL acceleration support"
 echo "  --disable-nptl           disable usermode NPTL support"
 echo "  --enable-nptl            enable usermode NPTL support"
 echo "  --enable-system          enable all system emulation targets"
@@ -1898,6 +1905,7 @@ echo "IO thread         $io_thread"
 echo "Linux AIO support $linux_aio"
 echo "Install blobs     $blobs"
 echo "KVM support       $kvm"
+echo "GL support        $gl"
 echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 echo "fdatasync         $fdatasync"
@@ -2405,6 +2413,9 @@ case "$target_arch2" in
   i386|x86_64)
     if test "$xen" = "yes" -a "$target_softmmu" = "yes" ; then
       echo "CONFIG_XEN=y" >> $config_target_mak
+    fi
+    if test "$gl" = "yes" -a "$target_softmmu" = "yes" ; then
+      echo "CONFIG_GL=y" >> $config_target_mak
     fi
 esac
 case "$target_arch2" in
