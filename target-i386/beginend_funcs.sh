@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/sh
 # Copyright 2008 (C) Intel Corporation
 #
 # echo names of functions that are legal between a glBegin and glEnd pair.

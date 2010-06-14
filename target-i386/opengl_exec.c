@@ -33,9 +33,6 @@
 //#include <stdio.h>
 extern struct FILE *stderr;		/* Standard error output stream.  */
 
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-
 #define GL_GLEXT_PROTOTYPES
 #define GLX_GLXEXT_PROTOTYPES
 #include <mesa_gl.h>
@@ -44,9 +41,6 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 #include "opengl_func.h"
 #include "mesa_mipmap.h"
 #include "opengl_process.h"
-
-
-
 #include "opengl_utils.h"
 #include "gloffscreen.h"
 
@@ -1030,6 +1024,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
               formatFlags |= GLO_FF_BITS_24;
             else
               formatFlags |= GLO_FF_BITS_32;
+
 
             GLState *state = _create_context(process, fake_ctxt, fake_shareList);
             state->context = glo_context_create(formatFlags,
