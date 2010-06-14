@@ -276,7 +276,7 @@ static inline QGloSurface *get_qsurface_from_client_drawable(GLState *state, Cli
 // This must always be called only on surfaces belonging to the current context
 static inline void render_surface(QGloSurface *qsurface, int bpp, int stride, char *buffer)
 {
-    int w, h, x, y, type;
+    int w, h;
     if(!qsurface->ready)
 	return;
 
@@ -288,7 +288,7 @@ static inline void render_surface(QGloSurface *qsurface, int bpp, int stride, ch
 //		*pixel = (int)buffer;
 //	}
 
-        glo_surface_getcontents(qsurface->surface, stride, bpp, buffer);
+    glo_surface_getcontents(qsurface->surface, stride, bpp, buffer);
 }
 
 // This must always be called only on surfaces belonging to the current context
