@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2008 (C) Intel Corporation
+#
+# NOTE: This REQUIRES bash, not sh.
 #
 # echo names of functions that are legal between a glBegin and glEnd pair.
 echo -e MAGIC_MACRO\(glVertex{2,3,4}{s,i,f,d}{,v}\)\\n
