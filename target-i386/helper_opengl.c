@@ -38,9 +38,6 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 #include "opengl_process.h"
 #include "opengl_exec.h"
 
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-
 #include "kvm.h"
 
 /* do_decode_call_int()
