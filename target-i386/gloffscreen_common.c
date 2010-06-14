@@ -32,6 +32,8 @@
 #include <GL/gl.h>
 #endif
 
+#include <stdio.h>
+
 // ---------------------------------------------------
 //  Copied from glx.h as we need them in windows too
 /*
@@ -232,3 +234,69 @@ int glo_flags_get_from_glx(unsigned int *fbConfig, int assumeBooleans) {
       flags |= GLO_FF_STENCIL_8;
     return flags;
 }
+
+void glo_surface_getcontents_readpixels(int formatFlags, int stride, int bpp,
+                             int width, int height, void *data) {
+    int glFormat, glType, rl, pa;
+    static int once;
+
+    glo_flags_get_readpixel_type(formatFlags, &glFormat, &glType);
+    switch(bpp) {
+      case 24:
+        if(glFormat != GL_BGR) {
+          if(!once) {
+            fprintf(stderr, "Warning: compressing alpha\n");
+            once = 1;
+          }
+          glFormat = GL_BGR;
+        }
+        break;
+      case 32:
+        if(glFormat != GL_BGRA) {
+          fprintf(stderr, "Warning: expanding alpha!\n");
+          glFormat = GL_BGRA;
+        }
+        break;
+      default:
+        fprintf(stderr, "Warning: unsupported colourdepth\n");
+        break;
+    }
+
+  // Save guest processes GL state before we ReadPixels()
+  glGetIntegerv(GL_PACK_ROW_LENGTH, &rl);
+  glGetIntegerv(GL_PACK_ALIGNMENT, &pa);
+  glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+  glPixelStorei(GL_PACK_ALIGNMENT, 4);
+
+#ifdef GETCONTENTS_INDIVIDUAL
+  GLubyte *b = (GLubyte *)data;
+  int irow;
+  for(irow = height-1 ; irow >= 0 ; irow--) {
+      glReadPixels(0, irow, width, 1, glFormat, glType, b);
+      b += stride;
+  }
+#else
+  // Faster buffer flip
+  GLubyte *b = (GLubyte *)data;
+  GLubyte *c = &((GLubyte *)data)[stride*(height-1)];
+  GLubyte *tmp = (GLubyte*)malloc(stride);
+  int irow;
+
+  glReadPixels(0, 0, width, height, glFormat, glType, data);
+
+  for(irow = 0; irow < height/2; irow++) {
+    memcpy(tmp, b, stride);
+    memcpy(b, c, stride);
+    memcpy(c, tmp, stride);
+    b += stride;
+    c -= stride;
+  }
+  free(tmp);
+
+#endif
+
+  // Restore GL state
+  glPixelStorei(GL_PACK_ROW_LENGTH, rl);
+  glPixelStorei(GL_PACK_ALIGNMENT, pa);
+}
+
