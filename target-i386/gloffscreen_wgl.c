@@ -182,7 +182,7 @@ void glo_kill(void) {
 /* ------------------------------------------------------------------------ */
 
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
-GloContext *glo_context_create(int formatFlags, GloSurface *shareLists) {
+GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
     GloContext *context;
     // pixel format attributes
     int          pf_attri[] = {
@@ -247,7 +247,7 @@ GloContext *glo_context_create(int formatFlags, GloSurface *shareLists) {
 
     if (shareLists) {
       // Need to share lists...
-      wglShareLists(shareLists->context->hContext, context->hContext);
+      wglShareLists(shareLists->hContext, context->hContext);
     }
 
     return context;
