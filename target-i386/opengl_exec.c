@@ -47,9 +47,87 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 // FIXME
 typedef int Bool;
 typedef int XID;
-typedef struct XVisualInfo XVisualInfo;
 typedef struct Display Display;
+const Bool True = 1;
+const Bool False = 0;
+const int None = 0;
+typedef struct __GLXFBConfigRec *GLXFBConfig;
+struct __GLXFBConfigRec {
+  int bitsRGBA[4];
+  int bitsPerPixel; // could be 32 but only 8880 RGBA
+  int bitsDepthBuffer;
+  int bitsStencilBuffer;
+  int bitsAccumRGBA[4];
+};
+typedef struct __Visual Visual;
+typedef unsigned long VisualID;
+typedef struct {
+  Visual *visual;
+  VisualID visualid;
+  int screen;
+  int depth;
+#if defined(__cplusplus) || defined(c_plusplus)
+  int c_class;                                  /* C++ */
+#else
+  int class;
+#endif
+  unsigned long red_mask;
+  unsigned long green_mask;
+  unsigned long blue_mask;
+  int colormap_size;
+  int bits_per_rgb;
+} XVisualInfo;
+
+#define GLX_VENDOR              1
+#define GLX_VERSION             2
+#define GLX_EXTENSIONS          3
+
+#define GLX_USE_GL      1
+#define GLX_BUFFER_SIZE     2
+#define GLX_LEVEL       3
+#define GLX_RGBA        4
+#define GLX_DOUBLEBUFFER    5
+#define GLX_STEREO      6
+#define GLX_AUX_BUFFERS     7
+#define GLX_RED_SIZE        8
+#define GLX_GREEN_SIZE      9
+#define GLX_BLUE_SIZE       10
+#define GLX_ALPHA_SIZE      11
+#define GLX_DEPTH_SIZE      12
+#define GLX_STENCIL_SIZE    13
+#define GLX_ACCUM_RED_SIZE  14
+#define GLX_ACCUM_GREEN_SIZE    15
+#define GLX_ACCUM_BLUE_SIZE 16
+#define GLX_ACCUM_ALPHA_SIZE    17
+/*
+ * GLX 1.4 and later:
+ */
+#define GLX_SAMPLE_BUFFERS              0x186a0 /*100000*/
+#define GLX_SAMPLES                     0x186a1 /*100001*/
 // FIXME
+
+const GLXFBConfig FBCONFIGS[] = {
+    {{8,8,8,8}, 32,  0,  0, {0,0,0,0}},
+    {{8,8,8,8}, 32, 24,  0, {0,0,0,0}},
+    {{8,8,8,8}, 32, 24,  8, {0,0,0,0}},
+
+    {{8,8,8,0}, 32,  0,  0, {0,0,0,0}},
+    {{8,8,8,0}, 32, 24,  0, {0,0,0,0}},
+    {{8,8,8,0}, 32, 24,  8, {0,0,0,0}},
+
+    {{8,8,8,0}, 24,  0,  0, {0,0,0,0}},
+    {{8,8,8,0}, 24, 24,  0, {0,0,0,0}},
+    {{8,8,8,0}, 24, 24,  8, {0,0,0,0}},
+
+    {{5,6,5,0}, 16,  0,  0, {0,0,0,0}},
+    {{5,6,5,0}, 16, 24,  0, {0,0,0,0}},
+    {{5,6,5,0}, 16, 24,  8, {0,0,0,0}},
+};
+
+#define FGLX_VERSION_STRING "1.1"
+#define FGLX_VERSION_MAJOR 1
+#define FGLX_VERSION_MINOR 1
+
 
 void *qemu_malloc(size_t size);
 void *qemu_realloc(void *ptr, size_t size);
@@ -117,21 +195,6 @@ static void *get_glu_ptr(const char *name)
 int display_function_call = 0;
 extern int kill_process;
 
-static XVisualInfo *get_default_visual()
-{
-    static XVisualInfo *vis = NULL;
-    XVisualInfo theTemplate;
-    int numVisuals;
-
-    if (vis)
-        return vis;
-    fprintf(stderr, "get_default_visual\n");
-    theTemplate.screen = 0;
-    vis = XGetVisualInfo(dpy, VisualScreenMask, &theTemplate, &numVisuals);
-
-    return vis;
-}
-
 typedef struct {
     void *key;
     void *value;
@@ -143,7 +206,7 @@ typedef struct {
 #define MAX_FBCONFIG 10
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
-
+#define PTR_TO_INT(X) ((unsigned int)(long long)(void*)(X))
 
 typedef struct {
     GLbitfield mask;
@@ -237,7 +300,9 @@ typedef struct {
     ProcessStruct p;
 
     int next_available_context_number;
+#ifdef ALLOW_PBUFFER
     int next_available_pbuffer_number;
+#endif
 
     int nb_states;
     GLState default_state;
@@ -249,7 +314,9 @@ typedef struct {
     int fbconfigs_max[MAX_FBCONFIG];
     int nfbconfig_total;
 
+#ifdef ALLOW_PBUFFER
     Assoc association_fakepbuffer_pbuffer[MAX_ASSOC_SIZE];
+#endif
 
     int primitive;
     int bufsize;
@@ -311,7 +378,8 @@ static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
     }
     else {
         fprintf(stderr, "Error: Surface is not current! %08x %08x\n",
-        process->current_state, process->current_state->current_qsurface);
+        PTR_TO_INT(process->current_state),
+        PTR_TO_INT(process->current_state->current_qsurface));
         exit(1);
     }
 
@@ -350,7 +418,7 @@ static inline ClientGLXDrawable to_drawable(arg_t arg)
 
 /* ---- */
 
-
+#ifdef ALLOW_PBUFFER
 GLXPbuffer get_association_fakepbuffer_pbuffer(
                 ProcessState *process, ClientGLXDrawable fakepbuffer)
 {
@@ -403,7 +471,7 @@ void unset_association_fakepbuffer_pbuffer(ProcessState *process,
             return;
         }
 }
-
+#endif
 /* ---- */
 
 /* Bind a qsurface to a context (GLState) */
@@ -790,7 +858,7 @@ GLState *get_glstate_for_fake_ctxt(ProcessState *process, int fake_ctxt)
 void disconnect(ProcessState *process)
 {
     int i;
-
+#ifdef ALLOW_PBUFFER
     GET_EXT_PTR(void, glXDestroyPbuffer, (Display *, GLXPbuffer));
     for (i = 0; i < MAX_ASSOC_SIZE &&
                     process->association_fakepbuffer_pbuffer[i].key; i ++) {
@@ -798,7 +866,7 @@ void disconnect(ProcessState *process)
                 process->association_fakepbuffer_pbuffer[i].value;
         ptr_func_glXDestroyPbuffer(dpy, pbuffer);
     }
-
+#endif
     for (i = 0; i < process->nb_states; i++) {
         destroy_gl_state(process->glstates[i]);
         qemu_free(process->glstates[i]);
@@ -922,14 +990,15 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXWaitGL_func:
         {
-            glXWaitGL();
+            glFinish(); //glXWaitGL();
             ret.i = 0;
             break;
         }
 
     case glXWaitX_func:
         {
-            glXWaitX();
+            // FIXME GW Maybe we should just do this on the server?
+            //glXWaitX();
             ret.i = 0;
             break;
         }
@@ -942,35 +1011,50 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXQueryExtensionsString_func:
         {
-            ret.s = glXQueryExtensionsString(dpy, 0);
+            // No extensions for you...
+            ret.s = "";//glXQueryExtensionsString(dpy, 0);
             break;
         }
 
     case glXQueryServerString_func:
         {
-            ret.s = glXQueryServerString(dpy, 0, args[2]);
+            switch (args[2]) {
+            case GLX_VENDOR : ret.s = "QEmu"; break;
+            case GLX_VERSION : ret.s = FGLX_VERSION_STRING; break;
+            case GLX_EXTENSIONS : ret.s = ""; break;
+            default: ret.s = 0;
+            }
+            //ret.s = glXQueryServerString(dpy, 0, args[2]);
             break;
         }
 
     case glXGetClientString_func:
         {
-            ret.s = glXGetClientString(dpy, args[1]);
+            switch (args[2]) {
+            case GLX_VENDOR : ret.s = "QEmu"; break;
+            case GLX_VERSION : ret.s = FGLX_VERSION_STRING; break;
+            case GLX_EXTENSIONS : ret.s = ""; break;
+            default: ret.s = 0;
+            }
+            //ret.s = glXGetClientString(dpy, args[1]);
             break;
         }
 
     case glXGetScreenDriver_func:
         {
-            GET_EXT_PTR(const char *, glXGetScreenDriver, (Display *, int));
-
-            ret.s = ptr_func_glXGetScreenDriver(dpy, 0);
+            // FIXME GW What is this? not documented anywhere!!
+            //GET_EXT_PTR(const char *, glXGetScreenDriver, (Display *, int));
+            //ret.s = ptr_func_glXGetScreenDriver(dpy, 0);
+            ret.s = "";
             break;
         }
 
     case glXGetDriverConfig_func:
         {
-            GET_EXT_PTR(const char *, glXGetDriverConfig, (const char *));
-
-            ret.s = ptr_func_glXGetDriverConfig((const char *) args[0]);
+            // FIXME GW What is this? not documented anywhere!!
+            //GET_EXT_PTR(const char *, glXGetDriverConfig, (const char *));
+            //ret.s = ptr_func_glXGetDriverConfig((const char *) args[0]);
+            ret.s = "";
             break;
         }
 
@@ -1003,9 +1087,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
             GLState *state = _create_context(process, fake_ctxt, fake_shareList);
             state->context = glo_context_create(formatFlags,
-                                                shareListState?shareListState->context:0);
+                                                (GloContext*)shareListState?shareListState->context:0);
 
-            fprintf(stderr, " created context %08x for %08x\n", state, fake_ctxt);
+            fprintf(stderr, " created context %08x for %08x\n", PTR_TO_INT(state), PTR_TO_INT(fake_ctxt));
             break;
         }
 
@@ -1109,7 +1193,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXQueryVersion_func:
         {
-            ret.i = glXQueryVersion(dpy, (int *) args[1], (int *) args[2]);
+            int *major = (int *) args[1];
+            int *minor = (int *) args[2];
+            //ret.i = glXQueryVersion(dpy, (int *) args[1], (int *) args[2]);
+            if (major) *major=FGLX_VERSION_MAJOR;
+            if (minor) *minor=FGLX_VERSION_MINOR;
+            ret.i = True;
             break;
         }
 
@@ -1223,8 +1312,11 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXQueryExtension_func:
         {
-            ret.i =
-                glXQueryExtension(dpy, (int *) args[1], (int *) args[2]);
+            int *errorBase = (int *) args[1];
+            int *eventBase = (int *) args[2];
+            if (errorBase) *errorBase = 0; /* FIXME GW */
+            if (eventBase) *eventBase = 0; /* FIXME GW */
+            ret.i = True;
             break;
         }
 
@@ -1237,7 +1329,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 ret.i = 0;
             } else {
                 int *attrib_list = (int *) args[2];
-		while(*attrib_list != None) {
+		while (*attrib_list != None) {
 			if(*attrib_list == GLX_DOUBLEBUFFER) {
 				fprintf(stderr, "Squashing doublebuffered visual\n");
 				*(attrib_list+1) = False;
@@ -1261,7 +1353,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
-
+#ifdef ALLOW_PBUFFER
     case glXChooseFBConfigSGIX_func:
         {
             GET_EXT_PTR(GLXFBConfigSGIX *, glXChooseFBConfigSGIX,
@@ -1288,7 +1380,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
-
+#endif
     case glXGetFBConfigs_func:
         {
             GET_EXT_PTR(GLXFBConfig *, glXGetFBConfigs,
@@ -1313,7 +1405,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
-
+#ifdef ALLOW_PBUFFER
     case glXCreatePbuffer_func:
         {
             GET_EXT_PTR(GLXPbuffer, glXCreatePbuffer,
@@ -1409,7 +1501,21 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
+    case glXQueryGLXPbufferSGIX_func:
+        {
+            GET_EXT_PTR(int, glXQueryGLXPbufferSGIX,
+                        (Display *, GLXFBConfigSGIX, int, int *));
+            int client_fbconfig = args[1];
 
+            ret.i = 0;
+            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
+
+            if (fbconfig)
+                ret.i = ptr_func_glXQueryGLXPbufferSGIX(dpy,
+                                (GLXFBConfigSGIX) fbconfig,
+                                args[2], (int *) args[3]);
+            break;
+        }
     case glXBindTexImageATI_func:
         {
             GET_EXT_PTR(void, glXBindTexImageATI,
@@ -1498,7 +1604,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
-
+#endif
     case glXGetFBConfigAttrib_func:
         {
             GET_EXT_PTR(int, glXGetFBConfigAttrib,
@@ -1538,7 +1644,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
-
+#ifdef ALLOW_PBUFFER
     case glXGetFBConfigAttribSGIX_func:
         {
             GET_EXT_PTR(int, glXGetFBConfigAttribSGIX,
@@ -1556,7 +1662,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                                       (int *) args[3]);
             break;
         }
-
+#endif
     case glXQueryContext_func:
         {
             fprintf(stderr, "glXQueryContext not implemented\n");
@@ -1609,23 +1715,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
             break;
         }
-
-    case glXQueryGLXPbufferSGIX_func:
-        {
-            GET_EXT_PTR(int, glXQueryGLXPbufferSGIX,
-                        (Display *, GLXFBConfigSGIX, int, int *));
-            int client_fbconfig = args[1];
-
-            ret.i = 0;
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
-
-            if (fbconfig)
-                ret.i = ptr_func_glXQueryGLXPbufferSGIX(dpy,
-                                (GLXFBConfigSGIX) fbconfig,
-                                args[2], (int *) args[3]);
-            break;
-        }
-
+#ifdef ALLOW_PBUFFER
     case glXCreateContextWithConfigSGIX_func:
         {
             printf("glXCreateContextWithConfigSGIX not implemented\n");
@@ -1652,7 +1742,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
             break;
         }
-
+#endif
     case glXGetVisualFromFBConfig_func:
         {
             GET_EXT_PTR(XVisualInfo *, glXGetVisualFromFBConfig,

@@ -61,7 +61,7 @@ extern void glo_init(void);
 extern void glo_kill(void);
 
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
-extern GloContext *glo_context_create(int formatFlags, GloSurface *shareLists);
+extern GloContext *glo_context_create(int formatFlags, GloContext *shareLists);
 
 /* Destroy a previouslu created OpenGL context */
 extern void glo_context_destroy(GloContext *context);
@@ -107,11 +107,5 @@ extern int glo_flags_get_from_glx(unsigned int *fbConfig, int assumeBooleans);
  * GL_UNSIGNED_BYTE, but there don't appear to be any speed increase from
  * doing this on Windows at least.
  */
-
-/* Fudge stuff for now */
-#ifndef _WIN32
-#include <X11/Xlib.h>
-extern Display *glo_get_dpy(void);
-#endif
 
 #endif /* GLOFFSCREEN_H_ */

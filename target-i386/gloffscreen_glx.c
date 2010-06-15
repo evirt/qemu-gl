@@ -82,7 +82,7 @@ void glo_kill(void) {
 /* ------------------------------------------------------------------------ */
 
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
-GloContext *glo_context_create(int formatFlags, GloSurface *shareLists) {
+GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
   if (!glo_inited)
     glo_init();
 
@@ -131,7 +131,7 @@ GloContext *glo_context_create(int formatFlags, GloSurface *shareLists) {
   //FIXMEIM - always want alpha?
   context->context = glXCreateNewContext( glo.dpy, context->fbConfig,
                                           GLX_RGBA_TYPE,
-                                          shareLists ? shareLists->context->context : NULL,
+                                          shareLists ? shareLists->context : NULL,
                                           True );
   fprintf(stderr, "glocontext_create: %08x\n", context->context);
   if (!context->context) {
