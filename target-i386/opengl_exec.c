@@ -51,32 +51,10 @@ typedef struct Display Display;
 const Bool True = 1;
 const Bool False = 0;
 const int None = 0;
-typedef struct __GLXFBConfigRec *GLXFBConfig;
+typedef struct __GLXFBConfigRec GLXFBConfig;
 struct __GLXFBConfigRec {
-  int bitsRGBA[4];
-  int bitsPerPixel; // could be 32 but only 8880 RGBA
-  int bitsDepthBuffer;
-  int bitsStencilBuffer;
-  int bitsAccumRGBA[4];
+  int formatFlags;
 };
-typedef struct __Visual Visual;
-typedef unsigned long VisualID;
-typedef struct {
-  Visual *visual;
-  VisualID visualid;
-  int screen;
-  int depth;
-#if defined(__cplusplus) || defined(c_plusplus)
-  int c_class;                                  /* C++ */
-#else
-  int class;
-#endif
-  unsigned long red_mask;
-  unsigned long green_mask;
-  unsigned long blue_mask;
-  int colormap_size;
-  int bits_per_rgb;
-} XVisualInfo;
 
 #define GLX_VENDOR              1
 #define GLX_VERSION             2
@@ -106,23 +84,25 @@ typedef struct {
 #define GLX_SAMPLES                     0x186a1 /*100001*/
 // FIXME
 
+/* We'll say the XVisual Id is actually just an index into here */
 const GLXFBConfig FBCONFIGS[] = {
-    {{8,8,8,8}, 32,  0,  0, {0,0,0,0}},
-    {{8,8,8,8}, 32, 24,  0, {0,0,0,0}},
-    {{8,8,8,8}, 32, 24,  8, {0,0,0,0}},
+    {GLO_FF_ALPHA|GLO_FF_BITS_32},
+    {GLO_FF_ALPHA|GLO_FF_BITS_32|GLO_FF_DEPTH_24},
+    {GLO_FF_ALPHA|GLO_FF_BITS_32|GLO_FF_DEPTH_24|GLO_FF_STENCIL_8},
 
-    {{8,8,8,0}, 32,  0,  0, {0,0,0,0}},
-    {{8,8,8,0}, 32, 24,  0, {0,0,0,0}},
-    {{8,8,8,0}, 32, 24,  8, {0,0,0,0}},
+    {GLO_FF_BITS_32},
+    {GLO_FF_BITS_32|GLO_FF_DEPTH_24},
+    {GLO_FF_BITS_32|GLO_FF_DEPTH_24|GLO_FF_STENCIL_8},
 
-    {{8,8,8,0}, 24,  0,  0, {0,0,0,0}},
-    {{8,8,8,0}, 24, 24,  0, {0,0,0,0}},
-    {{8,8,8,0}, 24, 24,  8, {0,0,0,0}},
-
-    {{5,6,5,0}, 16,  0,  0, {0,0,0,0}},
-    {{5,6,5,0}, 16, 24,  0, {0,0,0,0}},
-    {{5,6,5,0}, 16, 24,  8, {0,0,0,0}},
+    {GLO_FF_BITS_24},
+    {GLO_FF_BITS_24|GLO_FF_DEPTH_24},
+    {GLO_FF_BITS_24|GLO_FF_DEPTH_24|GLO_FF_STENCIL_8},
+/*
+    {GLO_FF_BITS_16},
+    {GLO_FF_BITS_16|GLO_FF_DEPTH_24},
+    {GLO_FF_BITS_16|GLO_FF_DEPTH_24|GLO_FF_STENCIL_8},*/
 };
+
 
 #define FGLX_VERSION_STRING "1.1"
 #define FGLX_VERSION_MAJOR 1
@@ -206,7 +186,7 @@ typedef struct {
 #define MAX_FBCONFIG 10
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#define PTR_TO_INT(X) ((unsigned int)(long long)(void*)(X))
+#define DIM(X) (sizeof(X) / sizeof(X[0]))
 
 typedef struct {
     GLbitfield mask;
@@ -310,7 +290,7 @@ typedef struct {
     GLState *current_state;
 
     int nfbconfig;
-    GLXFBConfig *fbconfigs[MAX_FBCONFIG];
+    const GLXFBConfig *fbconfigs[MAX_FBCONFIG];
     int fbconfigs_max[MAX_FBCONFIG];
     int nfbconfig_total;
 
@@ -377,9 +357,9 @@ static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
         glo_surface_makecurrent(qsurface->surface);
     }
     else {
-        fprintf(stderr, "Error: Surface is not current! %08x %08x\n",
-        PTR_TO_INT(process->current_state),
-        PTR_TO_INT(process->current_state->current_qsurface));
+        fprintf(stderr, "Error: Surface is not current! %p %p\n",
+            process->current_state,
+            process->current_state->current_qsurface);
         exit(1);
     }
 
@@ -546,7 +526,7 @@ static int get_server_list(ProcessState *process, unsigned int client_list)
     return server_list;
 }
 
-GLXFBConfig get_fbconfig(ProcessState *process, int client_fbconfig)
+const GLXFBConfig *get_fbconfig(ProcessState *process, int client_fbconfig)
 {
     int i;
     int nbtotal = 0;
@@ -554,136 +534,78 @@ GLXFBConfig get_fbconfig(ProcessState *process, int client_fbconfig)
     for (i = 0; i < process->nfbconfig; i++) {
         assert(client_fbconfig >= 1 + nbtotal);
         if (client_fbconfig <= nbtotal + process->fbconfigs_max[i]) {
-            return process->fbconfigs[i][client_fbconfig - 1 - nbtotal];
+            return &process->fbconfigs[i][client_fbconfig - 1 - nbtotal];
         }
         nbtotal += process->fbconfigs_max[i];
     }
     return 0;
 }
 
-typedef struct {
-    int attribListLength;
-    int *attribList;
-    XVisualInfo *visInfo;
-} AssocAttribListVisual;
-
-static int nTabAssocAttribListVisual = 0;
-static AssocAttribListVisual *tabAssocAttribListVisual = NULL;
-
-static int _compute_length_of_attrib_list_including_zero(const int *attribList,
-                                                         int
-                                                         booleanMustHaveValue)
+static int glXChooseVisualFunc(const int *attrib_list)
 {
-    int i = 0, s = 0;
-
-    while (attribList[i]) {
-        if (booleanMustHaveValue ||
-            !(attribList[i] == GLX_USE_GL || attribList[i] == GLX_RGBA ||
-              attribList[i] == GLX_DOUBLEBUFFER ||
-              attribList[i] == GLX_STEREO)) {
-            i += 2;
-        } else {
-            i++;
-        }
-        //FIXMEIM hack
-        if(attribList[i] == GLX_DOUBLEBUFFER) {
-            s += 1;
-        }
-    }
-    return i + 1 - s;
-}
-
-static int glXChooseVisualFunc(Display *dpy, const int *_attribList)
-{
-    if (_attribList == NULL)
+    if (attrib_list == NULL)
         return 0;
-    int attribListLength =
-        _compute_length_of_attrib_list_including_zero(_attribList, 0);
-    int i, j;
 
-    int *attribList = qemu_malloc(sizeof(int) * attribListLength);
-//    memcpy(attribList, _attribList, sizeof(int) * attribListLength);
-    //FIXMEIM hack
-    i = j = 0;
-    while (_attribList[i]) {
-        if(_attribList[i] != GLX_DOUBLEBUFFER) {
-	    attribList[j] = _attribList[i];
-                j++;
-        }
-        i++;
-    }
-    attribList[j] = 0;
+    int formatFlags = glo_flags_get_from_glx(attrib_list, True);
+    int i;
+    int bestConfig = 0;
+    int bestScore = -1;
 
-    if(i != j)
-       fprintf(stderr, "choose visual - dropping double-buffer\n");
-
-    i = 0;
-    while (attribList[i]) {
-        if (!
-            (attribList[i] == GLX_USE_GL || attribList[i] == GLX_RGBA ||
-             attribList[i] == GLX_DOUBLEBUFFER ||
-             attribList[i] == GLX_STEREO)) {
-            if (attribList[i] == GLX_SAMPLE_BUFFERS && attribList[i + 1] != 0
-                && getenv("DISABLE_SAMPLE_BUFFERS")) {
-                fprintf(stderr, "Disabling GLX_SAMPLE_BUFFERS\n");
-                attribList[i + 1] = 0;
-            }
-            i += 2;
-        } else {
-            i++;
-        }
+    for (i=0;i<DIM(FBCONFIGS);i++) {
+      int score = glo_flags_score(formatFlags, FBCONFIGS[i].formatFlags);
+      if (bestScore < 0 || score<=bestScore) {
+        bestScore = score;
+        bestConfig = i;
+      }
     }
 
-    for (i = 0; i < nTabAssocAttribListVisual; i++) {
-        if (tabAssocAttribListVisual[i].attribListLength == attribListLength
-            && memcmp(tabAssocAttribListVisual[i].attribList, attribList,
-                      attribListLength * sizeof(int)) == 0) {
-            qemu_free(attribList);
-            return (tabAssocAttribListVisual[i].
-                    visInfo) ? tabAssocAttribListVisual[i].visInfo->
-                visualid : 0;
-        }
-    }
-    XVisualInfo *visInfo = glXChooseVisual(dpy, 0, attribList);
-
-    tabAssocAttribListVisual = qemu_realloc(
-                    tabAssocAttribListVisual, sizeof(AssocAttribListVisual) *
-                    (nTabAssocAttribListVisual + 1));
-    tabAssocAttribListVisual[nTabAssocAttribListVisual].attribListLength =
-        attribListLength;
-    tabAssocAttribListVisual[nTabAssocAttribListVisual].attribList =
-        (int *) qemu_malloc(sizeof(int) * attribListLength);
-    memcpy(tabAssocAttribListVisual[nTabAssocAttribListVisual].attribList,
-           attribList, sizeof(int) * attribListLength);
-    tabAssocAttribListVisual[nTabAssocAttribListVisual].visInfo = visInfo;
-    nTabAssocAttribListVisual++;
-    qemu_free(attribList);
-    return (visInfo) ? visInfo->visualid : 0;
+    if (bestScore > 0)
+      fprintf(stderr, "Got format flags %d but we couldn't find an exactly matching config, chose %d\n", formatFlags, bestConfig);
+    fprintf(stderr, "glXChooseVisualFunc chose %d, format %d\n", bestConfig, FBCONFIGS[bestConfig].formatFlags);
+    return bestConfig;
 }
 
-static XVisualInfo *get_visual_info_from_visual_id(int visualid)
-{
-    int i, n;
-    XVisualInfo template;
-    XVisualInfo *visInfo;
+static int glXGetConfigFunc(int visualid, int attrib, int *value) {
+  const GLXFBConfig *config = &FBCONFIGS[0]; // default
 
-    for (i = 0; i < nTabAssocAttribListVisual; i++) {
-        if (tabAssocAttribListVisual[i].visInfo &&
-            tabAssocAttribListVisual[i].visInfo->visualid == visualid) {
-            return tabAssocAttribListVisual[i].visInfo;
-        }
-    }
-    template.visualid = visualid;
-    visInfo = XGetVisualInfo(dpy, VisualIDMask, &template, &n);
-    tabAssocAttribListVisual =
-        qemu_realloc(tabAssocAttribListVisual,
-                sizeof(AssocAttribListVisual) * (nTabAssocAttribListVisual +
-                                                 1));
-    tabAssocAttribListVisual[nTabAssocAttribListVisual].attribListLength = 0;
-    tabAssocAttribListVisual[nTabAssocAttribListVisual].attribList = NULL;
-    tabAssocAttribListVisual[nTabAssocAttribListVisual].visInfo = visInfo;
-    nTabAssocAttribListVisual++;
-    return visInfo;
+  if (visualid>=0 && visualid<DIM(FBCONFIGS))
+    config = &FBCONFIGS[visualid];
+  else
+    fprintf(stderr, "Unknown visual ID %d\n", visualid);
+
+  int v = glo_get_glx_from_flags(config->formatFlags, attrib);
+  if (value) *value = v;
+  return 0;
+}
+
+static const GLXFBConfig * glXGetFBConfigsFunc(int screen, int *nelements) {
+  *nelements = DIM(FBCONFIGS);
+  return &FBCONFIGS[0];
+}
+
+static int glXGetFBConfigAttribFunc(const GLXFBConfig *fbconfig, int attrib, int *value) {
+   // TODO other enums - see http://www.opengl.org/sdk/docs/man/xhtml/glXGetFBConfigAttrib.xml
+
+   int v = glo_get_glx_from_flags(fbconfig->formatFlags, attrib);
+   if (value) *value = v;
+   return 0;
+}
+
+static const GLXFBConfig *glXChooseFBConfigFunc(int screen, const int *attrib_list, int *nelements) {
+  int formatFlags;
+  int i;
+
+  if (attrib_list != NULL) {
+    formatFlags = glo_flags_get_from_glx(attrib_list, False);
+    for (i=0;i<DIM(FBCONFIGS);i++)
+      if (FBCONFIGS[i].formatFlags == formatFlags) {
+        if (nelements) *nelements=1;
+        return &FBCONFIGS[i];
+      }
+  }
+
+  if (nelements) *nelements=0;
+  return 0;
 }
 
 static void do_glClientActiveTextureARB(int texture)
@@ -1005,7 +927,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXChooseVisual_func:
         {
-            ret.i = glXChooseVisualFunc(dpy, (int *) args[2]);
+            ret.i = glXChooseVisualFunc((int *) args[2]);
             break;
         }
 
@@ -1068,42 +990,30 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         fake_shareList);
 
             GLState *shareListState = get_glstate_for_fake_ctxt(process, fake_shareList);
-            XVisualInfo *vis = get_visual_info_from_visual_id(visualid);
-
             int fake_ctxt = ++process->next_available_context_number;
 
             ret.i = fake_ctxt;
 
-            // Work out format flags from visual
-            // TODO GW - could do better?
-            int formatFlags = GLO_FF_DEFAULT & ~GLO_FF_BITS_MASK;
-            if (vis->depth == 16)
-              formatFlags |= GLO_FF_BITS_16;
-            else if (vis->depth == 24)
-              formatFlags |= GLO_FF_BITS_24;
-            else
-              formatFlags |= GLO_FF_BITS_32;
-
+            // Work out format flags from visual id
+            int formatFlags = GLO_FF_DEFAULT;
+            if (visualid>=0 && visualid<DIM(FBCONFIGS))
+              formatFlags = FBCONFIGS[visualid].formatFlags;
 
             GLState *state = _create_context(process, fake_ctxt, fake_shareList);
             state->context = glo_context_create(formatFlags,
                                                 (GloContext*)shareListState?shareListState->context:0);
 
-            fprintf(stderr, " created context %08x for %08x\n", PTR_TO_INT(state), PTR_TO_INT(fake_ctxt));
+            fprintf(stderr, " created context %p for %08x\n", state, fake_ctxt);
             break;
         }
 
 
     case glXCreateNewContext_func:
         {
-#if 0 //GW
-            GET_EXT_PTR(GLXContext, glXCreateNewContext,
-                        (Display *, GLXFBConfig, int, GLXContext, int));
-#endif
             int client_fbconfig = args[1];
 
             ret.i = 0;
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
+            const GLXFBConfig *fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig) {
                 int fake_shareList = args[3];
@@ -1111,16 +1021,10 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
                 process->next_available_context_number++;
                 int fake_ctxt = process->next_available_context_number;
-#if 0 //GW
-                GLXContext ctxt = ptr_func_glXCreateNewContext(
-                                dpy, fbconfig, args[2], shareList, args[4]);
-                set_association_fakecontext_glxcontext(
-                                process, fake_ctxt, ctxt);
-#endif
                 ret.i = fake_ctxt;
 
                 GLState *state = _create_context(process, fake_ctxt, fake_shareList);
-                state->context = glo_context_create(GLO_FF_DEFAULT,
+                state->context = glo_context_create(fbconfig->formatFlags,
                                                     shareListState?shareListState->context:0); // FIXME GW get from fbconfig
             }
             break;
@@ -1272,13 +1176,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case glXGetConfig_func:
         {
             int visualid = args[1];
-            XVisualInfo *vis = NULL;
-
-            if (visualid)
-                vis = get_visual_info_from_visual_id(visualid);
-            if (vis == NULL)
-                vis = get_default_visual();
-            ret.i = glXGetConfig(dpy, vis, args[2], (int *) args[3]);
+            ret.i = glXGetConfigFunc(visualid, args[2], (int *) args[3]);
             break;
         }
 
@@ -1287,19 +1185,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int visualid = args[1];
             int n = args[2];
             int i;
-            XVisualInfo *vis = NULL;
             int *attribs = (int *) args[3];
             int *values = (int *) args[4];
             int *res = (int *) args[5];
 
-            if (visualid)
-                vis = get_visual_info_from_visual_id(visualid);
-            if (vis == NULL)
-                vis = get_default_visual();
-
-
             for (i = 0; i < n; i++) {
-                res[i] = glXGetConfig(dpy, vis, attribs[i], &values[i]);
+                res[i] = glXGetConfigFunc(visualid, attribs[i], &values[i]);
             }
             break;
         }
@@ -1322,8 +1213,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXChooseFBConfig_func:
         {
-            GET_EXT_PTR(GLXFBConfig *, glXChooseFBConfig,
-                        (Display *, int, int *, int *));
             if (process->nfbconfig == MAX_FBCONFIG) {
                 *(int *) args[3] = 0;
                 ret.i = 0;
@@ -1336,9 +1225,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 			}
 			attrib_list += 2;
 		}
-                GLXFBConfig *fbconfigs =
-                    ptr_func_glXChooseFBConfig(dpy, args[1], (int *) args[2],
-                                               (int *) args[3]);
+                const GLXFBConfig *fbconfigs =
+                    glXChooseFBConfigFunc(args[1], (int *) args[2], (int *) args[3]);
                 if (fbconfigs) {
                     process->fbconfigs[process->nfbconfig] = fbconfigs;
                     process->fbconfigs_max[process->nfbconfig] =
@@ -1383,14 +1271,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
     case glXGetFBConfigs_func:
         {
-            GET_EXT_PTR(GLXFBConfig *, glXGetFBConfigs,
-                        (Display *, int, int *));
             if (process->nfbconfig == MAX_FBCONFIG) {
                 *(int *) args[2] = 0;
                 ret.i = 0;
             } else {
-                GLXFBConfig *fbconfigs =
-                    ptr_func_glXGetFBConfigs(dpy, args[1], (int *) args[2]);
+                const GLXFBConfig *fbconfigs =
+                    glXGetFBConfigsFunc(args[1], (int *) args[2]);
                 if (fbconfigs) {
                     process->fbconfigs[process->nfbconfig] = fbconfigs;
                     process->fbconfigs_max[process->nfbconfig] =
@@ -1607,37 +1493,31 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
     case glXGetFBConfigAttrib_func:
         {
-            GET_EXT_PTR(int, glXGetFBConfigAttrib,
-                        (Display *, GLXFBConfig, int, int *));
             int client_fbconfig = args[1];
 
             ret.i = 0;
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
+            const GLXFBConfig *fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig)
                 ret.i =
-                    ptr_func_glXGetFBConfigAttrib(dpy, fbconfig, args[2],
-                                                  (int *) args[3]);
+                    glXGetFBConfigAttribFunc(fbconfig, args[2], (int *) args[3]);
             break;
         }
 
     case glXGetFBConfigAttrib_extended_func:
         {
-            GET_EXT_PTR(int, glXGetFBConfigAttrib,
-                        (Display *, GLXFBConfig, int, int *));
             int client_fbconfig = args[1];
             int n = args[2];
             int i;
             int *attribs = (int *) args[3];
             int *values = (int *) args[4];
             int *res = (int *) args[5];
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
+            const GLXFBConfig *fbconfig = get_fbconfig(process, client_fbconfig);
 
             for (i = 0; i < n; i++) {
                 if (fbconfig) {
                     res[i] =
-                        ptr_func_glXGetFBConfigAttrib(dpy, fbconfig,
-                                                      attribs[i], &values[i]);
+                        glXGetFBConfigAttribFunc(fbconfig, attribs[i], &values[i]);
                 } else {
                     res[i] = 0;
                 }
@@ -1692,7 +1572,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         {
             // TODO GW one of:
             // GLX_WIDTH, GLX_HEIGHT, GLX_PRESERVED_CONTENTS, GLX_LARGEST_PBUFFER, GLX_FBCONFIG_ID
-            fprintf(stderr, "glXQueryDrawable not implemented\n");
+            fprintf(stderr, "FIXME: glXQueryDrawable not implemented\n");
             ret.i = 0;
 #if 0 //GW
             GET_EXT_PTR(void, glXQueryDrawable,
@@ -1745,50 +1625,34 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
     case glXGetVisualFromFBConfig_func:
         {
-            GET_EXT_PTR(XVisualInfo *, glXGetVisualFromFBConfig,
-                        (Display *, GLXFBConfig));
             int client_fbconfig = args[1];
 
             ret.i = 0;
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
+            const GLXFBConfig *fbconfig = get_fbconfig(process, client_fbconfig);
 
             if (fbconfig) {
-                XVisualInfo *vis =
-                    ptr_func_glXGetVisualFromFBConfig(dpy, fbconfig);
-                ret.i = (vis) ? vis->visualid : 0;
-                if (vis) {
-                    tabAssocAttribListVisual =
-                        qemu_realloc(tabAssocAttribListVisual,
-                                sizeof(AssocAttribListVisual) *
-                                (nTabAssocAttribListVisual + 1));
-                    tabAssocAttribListVisual[nTabAssocAttribListVisual].
-                        attribListLength = 0;
-                    tabAssocAttribListVisual[nTabAssocAttribListVisual].
-                        attribList = NULL;
-                    tabAssocAttribListVisual[nTabAssocAttribListVisual].
-                        visInfo = vis;
-                    nTabAssocAttribListVisual++;
-                }
+                // we tread visualid as the index into the fbconfigs array
+                ret.i = &FBCONFIGS[0] - fbconfig;
                 if (display_function_call)
                     fprintf(stderr, "visualid = %d\n", ret.i);
             }
             break;
         }
-
     case glXSwapIntervalSGI_func:
         {
-            GET_EXT_PTR(int, glXSwapIntervalSGI, (int));
-
-            ret.i = ptr_func_glXSwapIntervalSGI(args[0]);
+            /*GET_EXT_PTR(int, glXSwapIntervalSGI, (int));
+            ret.i = ptr_func_glXSwapIntervalSGI(args[0]);*/
+            ret.i = 0;
             break;
         }
 
     case glXGetProcAddress_fake_func:
         {
 //            if (display_function_call)
-                fprintf(stderr, "glXGetProcAddress %s  ", (char *) args[0]);
+            fprintf(stderr, "glXGetProcAddress %s  ", (char *) args[0]);
             ret.i = glXGetProcAddressARB((const GLubyte *) args[0]) != NULL;
                 fprintf(stderr, " == %08x\n", ret.i);
+            ret.i = 0;
             break;
         }
 
@@ -1801,7 +1665,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
             for (i = 0; i < nbElts; i++) {
                 int len = strlen(huge_buffer);
-
+                fprintf(stderr, "glXGetProcAddress_global %s  ", (char *)huge_buffer);
                 result[i] =
                     glXGetProcAddressARB((const GLubyte *) huge_buffer) !=
                     NULL;
@@ -1809,7 +1673,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
-
 /* Begin of texture stuff */
     case glBindTexture_func:
     case glBindTextureEXT_func:

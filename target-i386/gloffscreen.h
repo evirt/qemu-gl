@@ -88,13 +88,17 @@ extern int glo_flags_get_stencil_bits(int formatFlags);
 extern void glo_flags_get_rgba_bits(int formatFlags, int *rgba);
 extern int glo_flags_get_bytes_per_pixel(int formatFlags);
 extern void glo_flags_get_readpixel_type(int formatFlags, int *glFormat, int *glType);
+/* Score how close the given format flags match. 0=great, >0 not so great */
+extern int glo_flags_score(int formatFlagsExpected, int formatFlagsReal);
 
 /* Create a set of format flags from a null-terminated list
  * of GLX fbConfig flags. If assumeBooleans is set, items such
  * as GLX_RGBA/GLX_DOUBLEBUFFER are treated as booleans, not key-value pairs
  * (glXChooseVisual treats them as booleans, glXChooseFBConfig as key-value pairs)
  */
-extern int glo_flags_get_from_glx(unsigned int *fbConfig, int assumeBooleans);
+extern int glo_flags_get_from_glx(const int *fbConfig, int assumeBooleans);
+/* Use in place of glxGetConfig - returns information from flags based on a GLX enum */
+extern int glo_get_glx_from_flags(int formatFlags, int glxEnum);
 
 
 /* In terms of speed, glReadPixels actually seems the best we can do.

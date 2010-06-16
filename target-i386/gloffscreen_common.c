@@ -147,7 +147,29 @@ void glo_flags_get_readpixel_type(int formatFlags, int *glFormat, int *glType) {
     if (glType) *glType = gType;
 }
 
-int glo_flags_get_from_glx(unsigned int *fbConfig, int assumeBooleans) {
+int glo_flags_score(int formatFlagsExpected, int formatFlagsReal) {
+  if (formatFlagsExpected == formatFlagsReal) return 0;
+  int score = 1;
+  // we wanted alpha, but we didn't get it
+  if ((formatFlagsExpected&GLO_FF_ALPHA_MASK) <
+      (formatFlagsReal&GLO_FF_ALPHA_MASK))
+    score++;
+  // less bits than we expected
+  if ((formatFlagsExpected&GLO_FF_BITS_MASK) <
+      !(formatFlagsReal&GLO_FF_BITS_MASK))
+    score++;
+  // less depth bits than we expected
+  if ((formatFlagsExpected&GLO_FF_DEPTH_MASK) <
+      !(formatFlagsReal&GLO_FF_DEPTH_MASK))
+    score++;
+  // less stencil bits than we expected
+  if ((formatFlagsExpected&GLO_FF_STENCIL_MASK) <
+      !(formatFlagsReal&GLO_FF_STENCIL_MASK))
+    score++;
+  return score;
+}
+
+int glo_flags_get_from_glx(const int *fbConfig, int assumeBooleans) {
     int bufferSize = 0;
     int depthSize = 0;
     int stencilSize = 0;
@@ -231,4 +253,31 @@ int glo_flags_get_from_glx(unsigned int *fbConfig, int assumeBooleans) {
     if (stencilSize>0)
       flags |= GLO_FF_STENCIL_8;
     return flags;
+}
+
+int glo_get_glx_from_flags(int formatFlags, int glxEnum) {
+  int rgba[4];
+  glo_flags_get_rgba_bits(formatFlags, rgba);
+
+  switch (glxEnum) {
+    case GLX_USE_GL: return 1;
+    case GLX_BUFFER_SIZE: return glo_flags_get_bytes_per_pixel(formatFlags)*8;
+    case GLX_LEVEL: return 0;
+    case GLX_RGBA: return formatFlags & GLO_FF_ALPHA;
+    case GLX_DOUBLEBUFFER: return 1;
+    case GLX_STEREO: return 0;
+    case GLX_AUX_BUFFERS: return 0;
+    case GLX_RED_SIZE: return rgba[0];
+    case GLX_GREEN_SIZE: return rgba[1];
+    case GLX_BLUE_SIZE: return rgba[2];
+    case GLX_ALPHA_SIZE: return rgba[3];
+    case GLX_DEPTH_SIZE: return glo_flags_get_depth_bits(formatFlags);
+    case GLX_STENCIL_SIZE: return glo_flags_get_stencil_bits(formatFlags);
+    case GLX_ACCUM_RED_SIZE:
+    case GLX_ACCUM_GREEN_SIZE:
+    case GLX_ACCUM_BLUE_SIZE:
+    case GLX_ACCUM_ALPHA_SIZE:
+      return 0;
+  }
+  return 0;
 }
