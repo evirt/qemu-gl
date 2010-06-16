@@ -32,7 +32,13 @@
    only it misses things and is mildly different to stdio \o/. Hence
    don't include stdio and make our own defines. */
 //#include <stdio.h>
+#ifdef _WIN32
+#define DEBUGF(...) printf(__VA_ARGS__)
+#else
 extern struct FILE *stderr;		/* Standard error output stream.  */
+#define DEBUGF(...) fprintf(stderr, __VA_ARGS__)
+#endif
+
 
 #include "opengl_func.h"
 #include "opengl_process.h"
@@ -156,7 +162,7 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
                     break;
 
                 default:
-                    fprintf(stderr, "Oops : call %s arg %d pid=%d\n",
+                    DEBUGF( "Oops : call %s arg %d pid=%d\n",
                             tab_opengl_calls_name[func_number], i,
                             process->process_id);
                     return 0;
@@ -211,13 +217,13 @@ int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer)
             return 1; // Initialisation done
         }
         else {
-            fprintf(stderr, "Attempt to init twice. Continuing regardless.\n");
+            DEBUGF("Attempt to init twice. Continuing regardless.\n");
         }
     }
 
     if(unlikely(first_func == -1 || !process->wordsize)) {
         if(!process->wordsize && !first_func != -1)
-            fprintf(stderr, "commands submitted before process init.\n");
+            DEBUGF("commands submitted before process init.\n");
         ret = 0;
     }
     else {
