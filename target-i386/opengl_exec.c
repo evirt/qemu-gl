@@ -19,7 +19,7 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
  * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISiNG FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
@@ -27,11 +27,17 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/types.h> // for pid_t
 /* GW: dyngen-exec.h defines its own version of stuff that is in stdio.h - 
    only it misses things and is mildly different to stdio \o/. Hence
    don't include stdio and make our own defines. */
 //#include <stdio.h>
+#ifdef _WIN32
+#define DEBUGF(...) printf(__VA_ARGS__)
+#else
 extern struct FILE *stderr;		/* Standard error output stream.  */
+#define DEBUGF(...) fprintf(stderr, __VA_ARGS__)
+#endif
 
 #define GL_GLEXT_PROTOTYPES
 #define GLX_GLXEXT_PROTOTYPES
@@ -115,13 +121,19 @@ void qemu_free(void *ptr);
 
 #define glGetError() 0
 
+#ifdef _WIN32
+#define GL_GETPROCADDRESS(X) wglGetProcAddress(X)
+#else
+#define GL_GETPROCADDRESS(X) glXGetProcAddressARB(X)
+#endif
+
 #define GET_EXT_PTR(type, funcname, args_decl) \
       static int detect_##funcname = 0; \
       static type(*ptr_func_##funcname)args_decl = NULL; \
       if (detect_##funcname == 0) \
       { \
         detect_##funcname = 1; \
-        ptr_func_##funcname = (type(*)args_decl)glXGetProcAddressARB((const GLubyte*)#funcname); \
+        ptr_func_##funcname = (type(*)args_decl)GL_GETPROCADDRESS((const GLubyte*)#funcname); \
         assert (ptr_func_##funcname); \
       }
 
@@ -131,7 +143,7 @@ void qemu_free(void *ptr);
       if (detect_##funcname == 0) \
       { \
         detect_##funcname = 1; \
-        ptr_func_##funcname = (type(*)args_decl)glXGetProcAddressARB((const GLubyte*)#funcname); \
+        ptr_func_##funcname = (type(*)args_decl)GL_GETPROCADDRESS((const GLubyte*)#funcname); \
       }
 
 #ifndef WIN32
@@ -146,11 +158,11 @@ static void *get_glu_ptr(const char *name)
 #ifndef WIN32
         handle = dlopen("libGLU.so", RTLD_LAZY);
         if (!handle)
-            fprintf(stderr, "can't load libGLU.so : %s\n", dlerror());
+            DEBUGF("can't load libGLU.so : %s\n", dlerror());
 #else
         handle = (void *) LoadLibrary("glu32.dll");
         if (!handle)
-            fprintf(stderr, "can't load glu32.dll\n");
+            DEBUGF("can't load glu32.dll\n");
 #endif
     }
     if (handle) {
@@ -345,7 +357,7 @@ static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
     GloSurface *old_surface = qsurface->surface;
     GloSurface *surface;
 
-    fprintf(stderr, "resize_start\n");
+    DEBUGF("resize_start\n");
 
     surface = glo_surface_create(w, h, glstate->context);
     qsurface->surface = surface;
@@ -357,14 +369,14 @@ static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
         glo_surface_makecurrent(qsurface->surface);
     }
     else {
-        fprintf(stderr, "Error: Surface is not current! %p %p\n",
+        DEBUGF("Error: Surface is not current! %p %p\n",
             process->current_state,
             process->current_state->current_qsurface);
         exit(1);
     }
 
     glstate->current_qsurface->ready = 1;
-    fprintf(stderr, "resize_done\n");
+    DEBUGF( "resize_done\n");
 }
 
 
@@ -389,7 +401,7 @@ static inline ClientGLXDrawable to_drawable(arg_t arg)
 {
 #ifdef TARGET_X86_64
     if (arg > (unsigned long) -1) {
-        fprintf(stderr, "GLXDrawable too big for this implementation\n");
+        DEBUGF( "GLXDrawable too big for this implementation\n");
         exit(-1);
     }
 #endif
@@ -432,7 +444,7 @@ void set_association_fakepbuffer_pbuffer(ProcessState *process,
         process->association_fakepbuffer_pbuffer[i].key = (void *) fakepbuffer;
         process->association_fakepbuffer_pbuffer[i].value = (void *) pbuffer;
     } else
-        fprintf(stderr, "MAX_ASSOC_SIZE reached\n");
+        DEBUGF( "MAX_ASSOC_SIZE reached\n");
 }
 
 void unset_association_fakepbuffer_pbuffer(ProcessState *process,
@@ -495,7 +507,7 @@ static int get_server_texture(ProcessState *process,
     if (client_texture < 32768) {
         server_texture = process->current_state->tabTextures[client_texture];
     } else {
-        fprintf(stderr, "invalid texture name %d\n", client_texture);
+        DEBUGF( "invalid texture name %d\n", client_texture);
     }
     return server_texture;
 }
@@ -508,7 +520,7 @@ static int get_server_buffer(ProcessState *process,
     if (client_buffer < 32768) {
         server_buffer = process->current_state->tabBuffers[client_buffer];
     } else {
-        fprintf(stderr, "invalid buffer name %d\n", client_buffer);
+        DEBUGF( "invalid buffer name %d\n", client_buffer);
     }
     return server_buffer;
 }
@@ -521,7 +533,7 @@ static int get_server_list(ProcessState *process, unsigned int client_list)
     if (client_list < 32768) {
         server_list = process->current_state->tabLists[client_list];
     } else {
-        fprintf(stderr, "invalid list name %d\n", client_list);
+        DEBUGF( "invalid list name %d\n", client_list);
     }
     return server_list;
 }
@@ -560,8 +572,8 @@ static int glXChooseVisualFunc(const int *attrib_list)
     }
 
     if (bestScore > 0)
-      fprintf(stderr, "Got format flags %d but we couldn't find an exactly matching config, chose %d\n", formatFlags, bestConfig);
-    fprintf(stderr, "glXChooseVisualFunc chose %d, format %d\n", bestConfig, FBCONFIGS[bestConfig].formatFlags);
+      DEBUGF( "Got format flags %d but we couldn't find an exactly matching config, chose %d\n", formatFlags, bestConfig);
+    DEBUGF( "glXChooseVisualFunc chose %d, format %d\n", bestConfig, FBCONFIGS[bestConfig].formatFlags);
     return bestConfig;
 }
 
@@ -571,7 +583,7 @@ static int glXGetConfigFunc(int visualid, int attrib, int *value) {
   if (visualid>=0 && visualid<DIM(FBCONFIGS))
     config = &FBCONFIGS[visualid];
   else
-    fprintf(stderr, "Unknown visual ID %d\n", visualid);
+    DEBUGF( "Unknown visual ID %d\n", visualid);
 
   int v = glo_get_glx_from_flags(config->formatFlags, attrib);
   if (value) *value = v;
@@ -837,12 +849,12 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
         }
 
     if (process == NULL) {
-        fprintf(stderr, "Too many processes !\n");
+        DEBUGF( "Too many processes !\n");
         exit(-1);
     }
 
     if(switch_gl_context) {
-//        fprintf(stderr, "Ctx switch: pid: %d    %08x %08x %08x\n", pid,
+//        DEBUGF( "Ctx switch: pid: %d    %08x %08x %08x\n", pid,
 //                process->dpy, process->current_state->drawable,
 //                process->current_state->context);
         if(process->current_state->current_qsurface)
@@ -864,14 +876,14 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     ret.s = NULL;
 
     if (display_function_call) {
-        fprintf(stderr, "[%d]> %s\n", process->p.process_id,
+        DEBUGF( "[%d]> %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
     }
 
 #if 0
     if(func_number != glXSwapBuffers_func &&
        func_number != glXMakeCurrent_func && 1/*tab_opengl_calls_name[func_number][2] == 'X'*/)
-	fprintf(stderr, "[%d]> %s\n", process->p.process_id,
+	DEBUGF( "[%d]> %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
 #endif
 
@@ -901,7 +913,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int stride = (int)args[2];
             char *render_buffer = (char*)args[3];
 
-//            fprintf(stderr, "win: %08x stride: %d buf: %08x cl_dr: %08x qsurf: %08x\n", args[0], args[1], args[2], client_drawable, qsurface);
+//            DEBUGF( "win: %08x stride: %d buf: %08x cl_dr: %08x qsurf: %08x\n", args[0], args[1], args[2], client_drawable, qsurface);
 
             // We have to assume the current context here
             // since we assume that a drawable must belong to a specific context
@@ -986,7 +998,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int fake_shareList = (int) args[2];
 
             if (1 || display_function_call)
-                fprintf(stderr, "visualid=%d, fake_shareList=%d\n", visualid,
+                DEBUGF( "visualid=%d, fake_shareList=%d\n", visualid,
                         fake_shareList);
 
             GLState *shareListState = get_glstate_for_fake_ctxt(process, fake_shareList);
@@ -1003,7 +1015,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             state->context = glo_context_create(formatFlags,
                                                 (GloContext*)shareListState?shareListState->context:0);
 
-            fprintf(stderr, " created context %p for %08x\n", state, fake_ctxt);
+            DEBUGF( " created context %p for %08x\n", state, fake_ctxt);
             break;
         }
 
@@ -1032,7 +1044,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXCopyContext_func:
         {
-          fprintf(stderr, " glXCopyContext not supported (does anything use it?)\n");
+          DEBUGF( " glXCopyContext not supported (does anything use it?)\n");
             break;
         }
 
@@ -1041,7 +1053,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int fake_ctxt = (int) args[1];
 
             if (display_function_call)
-                fprintf(stderr, "fake_ctxt=%d\n", fake_ctxt);
+                DEBUGF( "fake_ctxt=%d\n", fake_ctxt);
 
             int i;
             for (i = 0; i < process->nb_states; i ++) {
@@ -1053,7 +1065,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->glstates[i]->fake_shareList;
                     process->glstates[i]->ref--;
                     if (process->glstates[i]->ref == 0) {
-                        fprintf(stderr,
+                        DEBUGF(
                                 "destroy_gl_state fake_ctxt = %d\n",
                                 process->glstates[i]->fake_ctxt);
                         destroy_gl_state(process->glstates[i]);
@@ -1071,7 +1083,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                 fake_shareList) {
                                 process->glstates[i]->ref--;
                                 if (process->glstates[i]->ref == 0) {
-                                    fprintf(stderr,
+                                    DEBUGF(
                                             "destroy_gl_state fake_ctxt = %d\n",
                                             process->glstates[i]->
                                             fake_ctxt);
@@ -1118,7 +1130,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int fake_ctxt = (int) args[2];
             GLState *glstate = NULL;
 
-//            fprintf(stderr, "Makecurrent: fake_ctx=%d client_drawable=%08x\n", fake_ctxt, client_drawable);
+//            DEBUGF( "Makecurrent: fake_ctx=%d client_drawable=%08x\n", fake_ctxt, client_drawable);
 
             if (client_drawable == 0 && fake_ctxt == 0) {
                 /* Release context */
@@ -1126,12 +1138,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                     process->current_state->current_qsurface->ref--;
                 process->current_state = &process->default_state;
 
-//                fprintf(stderr, " --release\n");
+//                DEBUGF( " --release\n");
                 glo_surface_makecurrent(0);
             } else { /* Lookup GLState struct for this context */
                 glstate = get_glstate_for_fake_ctxt(process, fake_ctxt);
                 if (!glstate) {
-                    fprintf(stderr, " --invalid fake_ctxt (%d)!\n", fake_ctxt);
+                    DEBUGF( " --invalid fake_ctxt (%d)!\n", fake_ctxt);
                 } else {
                     if(!set_current_qsurface(glstate, client_drawable)) {
                        // If there is no surface, create one.
@@ -1142,11 +1154,11 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                        qsurface->ref = 1;
 
                        bind_qsurface(glstate, qsurface);
-//                       fprintf(stderr, " --Client drawable not found, create new surface: %16x %16lx\n", (unsigned int)qsurface, (unsigned long int)client_drawable);
+//                       DEBUGF( " --Client drawable not found, create new surface: %16x %16lx\n", (unsigned int)qsurface, (unsigned long int)client_drawable);
 
                     }
                     else {
-//                       fprintf(stderr, " --Client drawable found, using surface: %16x %16lx\n", (unsigned int)glstate->current_qsurface, (unsigned long int)client_drawable);
+//                       DEBUGF( " --Client drawable found, using surface: %16x %16lx\n", (unsigned int)glstate->current_qsurface, (unsigned long int)client_drawable);
                     }
 
                     process->current_state = glstate;
@@ -1220,7 +1232,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 int *attrib_list = (int *) args[2];
 		while (*attrib_list != None) {
 			if(*attrib_list == GLX_DOUBLEBUFFER) {
-				fprintf(stderr, "Squashing doublebuffered visual\n");
+				DEBUGF( "Squashing doublebuffered visual\n");
 				*(attrib_list+1) = False;
 			}
 			attrib_list += 2;
@@ -1304,14 +1316,14 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             if (fbconfig) {
                 GLXPbuffer pbuffer =
                     ptr_func_glXCreatePbuffer(dpy, fbconfig, (int *) args[2]);
-                fprintf(stderr, "glXCreatePbuffer --> %x\n", (int) pbuffer);
+                DEBUGF( "glXCreatePbuffer --> %x\n", (int) pbuffer);
                 if (pbuffer) {
                     ClientGLXDrawable fake_pbuffer = to_drawable(
                                     ++ process->next_available_pbuffer_number);
 
                     set_association_fakepbuffer_pbuffer(
                                     process, fake_pbuffer, pbuffer);
-                    fprintf(stderr,
+                    DEBUGF(
                             "set_association_fakepbuffer_pbuffer(%p, %x)\n",
                             fake_pbuffer, (int) (long) pbuffer);
                     ret.i = (int) (long) fake_pbuffer;
@@ -1351,12 +1363,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
 
             if (display_function_call)
-                fprintf(stderr, "fake_pbuffer=%p\n", fake_pbuffer);
+                DEBUGF( "fake_pbuffer=%p\n", fake_pbuffer);
 
             GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
                             process, fake_pbuffer);
             if (pbuffer == 0) {
-                fprintf(stderr, "invalid fake_pbuffer (%p) !\n",
+                DEBUGF( "invalid fake_pbuffer (%p) !\n",
                                 fake_pbuffer);
             } else {
                 if (!is_gl_vendor_ati(dpy))
@@ -1373,12 +1385,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
 
             if (display_function_call)
-                fprintf(stderr, "fake_pbuffer=%p\n", fake_pbuffer);
+                DEBUGF( "fake_pbuffer=%p\n", fake_pbuffer);
 
             GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
                             process, fake_pbuffer);
             if (pbuffer == 0) {
-                fprintf(stderr, "invalid fake_pbuffer (%p)  !\n",
+                DEBUGF( "invalid fake_pbuffer (%p)  !\n",
                         fake_pbuffer);
             } else {
                 if (!is_gl_vendor_ati(dpy))
@@ -1409,13 +1421,13 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
 
             if (display_function_call)
-                fprintf(stderr, "fake_pbuffer=%p\n",
+                DEBUGF( "fake_pbuffer=%p\n",
                                 fake_pbuffer);
 
             GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
                                 process, fake_pbuffer);
             if (pbuffer == 0) {
-                fprintf(stderr,
+                DEBUGF(
                         "glXBindTexImageATI : invalid fake_pbuffer (%p) !\n",
                         fake_pbuffer);
             } else {
@@ -1431,13 +1443,13 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
 
             if (display_function_call)
-                fprintf(stderr, "fake_pbuffer=%d\n",
+                DEBUGF( "fake_pbuffer=%d\n",
                                 (int) (long) fake_pbuffer);
 
             GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
                             process, fake_pbuffer);
             if (pbuffer == 0) {
-                fprintf(stderr,
+                DEBUGF(
                         "glXReleaseTexImageATI : invalid fake_pbuffer (%d) !\n",
                         (int) (long) fake_pbuffer);
             } else {
@@ -1453,12 +1465,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
 
             if (display_function_call)
-                fprintf(stderr, "fake_pbuffer=%p\n", fake_pbuffer);
+                DEBUGF( "fake_pbuffer=%p\n", fake_pbuffer);
 
             GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
                             process, fake_pbuffer);
             if (pbuffer == 0) {
-                fprintf(stderr,
+                DEBUGF(
                         "glXBindTexImageARB : invalid fake_pbuffer (%p) !\n",
                         fake_pbuffer);
                 ret.i = 0;
@@ -1475,12 +1487,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
 
             if (display_function_call)
-                fprintf(stderr, "fake_pbuffer=%p\n", fake_pbuffer);
+                DEBUGF( "fake_pbuffer=%p\n", fake_pbuffer);
 
             GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
                             process, fake_pbuffer);
             if (pbuffer == 0) {
-                fprintf(stderr,
+                DEBUGF(
                         "glXReleaseTexImageARB : invalid fake_pbuffer (%p) !\n",
                         fake_pbuffer);
                 ret.i = 0;
@@ -1545,7 +1557,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
     case glXQueryContext_func:
         {
-            fprintf(stderr, "glXQueryContext not implemented\n");
+            DEBUGF( "glXQueryContext not implemented\n");
             ret.i = 0;
 #if 0 //GW
             GET_EXT_PTR(int, glXQueryContext,
@@ -1553,11 +1565,11 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int fake_ctxt = (int) args[1];
 
             if (display_function_call)
-                fprintf(stderr, "fake_ctx=%i\n", fake_ctxt);
+                DEBUGF( "fake_ctx=%i\n", fake_ctxt);
             GLXContext ctxt =
                 get_association_fakecontext_glxcontext(process, fake_ctxt);
             if (ctxt == NULL) {
-                fprintf(stderr, "invalid fake_ctxt (%i) !\n", fake_ctxt);
+                DEBUGF( "invalid fake_ctxt (%i) !\n", fake_ctxt);
                 ret.i = 0;
             } else {
                 ret.i =
@@ -1572,7 +1584,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         {
             // TODO GW one of:
             // GLX_WIDTH, GLX_HEIGHT, GLX_PRESERVED_CONTENTS, GLX_LARGEST_PBUFFER, GLX_FBCONFIG_ID
-            fprintf(stderr, "FIXME: glXQueryDrawable not implemented\n");
+            DEBUGF( "FIXME: glXQueryDrawable not implemented\n");
             ret.i = 0;
 #if 0 //GW
             GET_EXT_PTR(void, glXQueryDrawable,
@@ -1583,11 +1595,11 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                     glstate, client_drawable);
 
             if (display_function_call)
-                fprintf(stderr, "client_drawable=%p\n",
+                DEBUGF( "client_drawable=%p\n",
                                 client_drawable);
 
             if (!drawable)
-                fprintf(stderr, "invalid client_drawable (%p) !\n",
+                DEBUGF( "invalid client_drawable (%p) !\n",
                                 client_drawable);
             else
                 ptr_func_glXQueryDrawable(dpy, drawable,
@@ -1634,7 +1646,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 // we tread visualid as the index into the fbconfigs array
                 ret.i = &FBCONFIGS[0] - fbconfig;
                 if (display_function_call)
-                    fprintf(stderr, "visualid = %d\n", ret.i);
+                    DEBUGF( "visualid = %d\n", ret.i);
             }
             break;
         }
@@ -1649,9 +1661,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case glXGetProcAddress_fake_func:
         {
 //            if (display_function_call)
-            fprintf(stderr, "glXGetProcAddress %s  ", (char *) args[0]);
-            ret.i = glXGetProcAddressARB((const GLubyte *) args[0]) != NULL;
-                fprintf(stderr, " == %08x\n", ret.i);
+            DEBUGF( "glXGetProcAddress %s  ", (char *) args[0]);
+            ret.i = GL_GETPROCADDRESS((const GLubyte *) args[0]) != NULL;
+                DEBUGF( " == %08x\n", ret.i);
             ret.i = 0;
             break;
         }
@@ -1665,9 +1677,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
             for (i = 0; i < nbElts; i++) {
                 int len = strlen(huge_buffer);
-                fprintf(stderr, "glXGetProcAddress_global %s  ", (char *)huge_buffer);
+                DEBUGF( "glXGetProcAddress_global %s  ", (char *)huge_buffer);
                 result[i] =
-                    glXGetProcAddressARB((const GLubyte *) huge_buffer) !=
+                    GL_GETPROCADDRESS((const GLubyte *) huge_buffer) !=
                     NULL;
                 huge_buffer += len + 1;
             }
@@ -1809,7 +1821,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         }
 
     case glFramebufferTexture2D_func:
-        fprintf(stderr, "wooooot!\n");
+        DEBUGF( "wooooot!\n");
     case glFramebufferTexture2DEXT_func:
         {
             GET_EXT_PTR(void, glFramebufferTexture2DEXT,
@@ -2076,7 +2088,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->vertexPointerSize);
             memcpy(process->current_state->vertexPointer + offset,
                    (void *) args[5], bytes_size);
-            /* fprintf(stderr, "glVertexPointer_fake_func size=%d, type=%d,
+            /* DEBUGF( "glVertexPointer_fake_func size=%d, type=%d,
              * stride=%d, byte_size=%d\n", size, type, stride, bytes_size); */
             glVertexPointer(size, type, stride,
                             process->current_state->vertexPointer);
@@ -2098,7 +2110,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->normalPointerSize);
             memcpy(process->current_state->normalPointer + offset,
                    (void *) args[4], bytes_size);
-            // fprintf(stderr, "glNormalPointer_fake_func type=%d, stride=%d, 
+            // DEBUGF( "glNormalPointer_fake_func type=%d, stride=%d, 
             // byte_size=%d\n", type, stride, bytes_size);
             glNormalPointer(type, stride,
                             process->current_state->normalPointer);
@@ -2120,7 +2132,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->indexPointerSize);
             memcpy(process->current_state->indexPointer + offset,
                    (void *) args[4], bytes_size);
-            // fprintf(stderr, "glIndexPointer_fake_func type=%d, stride=%d,
+            // DEBUGF( "glIndexPointer_fake_func type=%d, stride=%d,
             // byte_size=%d\n", type, stride, bytes_size);
             glIndexPointer(type, stride,
                            process->current_state->indexPointer);
@@ -2141,7 +2153,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->edgeFlagPointerSize);
             memcpy(process->current_state->edgeFlagPointer + offset,
                    (void *) args[3], bytes_size);
-            // fprintf(stderr, "glEdgeFlagPointer_fake_func stride = %d,
+            // DEBUGF( "glEdgeFlagPointer_fake_func stride = %d,
             // bytes_size=%d\n", stride, bytes_size);
             glEdgeFlagPointer(stride,
                               process->current_state->edgeFlagPointer);
@@ -2218,7 +2230,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->colorPointerSize);
             memcpy(process->current_state->colorPointer + offset,
                    (void *) args[5], bytes_size);
-            // fprintf(stderr, "glColorPointer_fake_func bytes_size = %d\n",
+            // DEBUGF( "glColorPointer_fake_func bytes_size = %d\n",
             // bytes_size);
             glColorPointer(size, type, stride,
                            process->current_state->colorPointer);
@@ -2244,7 +2256,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->secondaryColorPointerSize);
             memcpy(process->current_state->secondaryColorPointer + offset,
                    (void *) args[5], bytes_size);
-            // fprintf(stderr, "glSecondaryColorPointer_fake_func bytes_size
+            // DEBUGF( "glSecondaryColorPointer_fake_func bytes_size
             // = %d\n", bytes_size);
             ptr_func_glSecondaryColorPointer(size, type, stride,
                                              process->current_state->
@@ -2322,7 +2334,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->texCoordPointerSize[index]);
             memcpy(process->current_state->texCoordPointer[index] + offset,
                    (void *) args[6], bytes_size);
-            /* fprintf(stderr, "glTexCoordPointer_fake_func size=%d, type=%d, 
+            /* DEBUGF( "glTexCoordPointer_fake_func size=%d, type=%d, 
              * stride=%d, byte_size=%d\n", size, type, stride, bytes_size); */
             do_glClientActiveTextureARB(GL_TEXTURE0_ARB + index);
             glTexCoordPointer(size, type, stride,
@@ -2350,7 +2362,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->weightPointerSize);
             memcpy(process->current_state->weightPointer + offset,
                    (void *) args[5], bytes_size);
-            /* fprintf(stderr, "glWeightPointerARB_fake_func size=%d,
+            /* DEBUGF( "glWeightPointerARB_fake_func size=%d,
              * type=%d, stride=%d, byte_size=%d\n", size, type, stride,
              * bytes_size); */
             ptr_func_glWeightPointerARB(size, type, stride,
@@ -2377,7 +2389,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->matrixIndexPointerSize);
             memcpy(process->current_state->matrixIndexPointer + offset,
                    (void *) args[5], bytes_size);
-            /* fprintf(stderr, "glMatrixIndexPointerARB_fake_func size=%d,
+            /* DEBUGF( "glMatrixIndexPointerARB_fake_func size=%d,
              * type=%d, stride=%d, byte_size=%d\n", size, type, stride,
              * bytes_size); */
             ptr_func_glMatrixIndexPointerARB(size, type, stride,
@@ -2402,7 +2414,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->fogCoordPointerSize);
             memcpy(process->current_state->fogCoordPointer + offset,
                    (void *) args[4], bytes_size);
-            // fprintf(stderr, "glFogCoordPointer_fake_func type=%d,
+            // DEBUGF( "glFogCoordPointer_fake_func type=%d,
             // stride=%d, byte_size=%d\n", type, stride, bytes_size);
             ptr_func_glFogCoordPointer(type, stride,
                                        process->current_state->
@@ -2427,7 +2439,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->variantPointerEXTSize[id]);
             memcpy(process->current_state->variantPointerEXT[id] + offset,
                    (void *) args[5], bytes_size);
-            // fprintf(stderr, "glVariantPointerEXT_fake_func[%d] type=%d,
+            // DEBUGF( "glVariantPointerEXT_fake_func[%d] type=%d,
             // stride=%d, byte_size=%d\n", id, type, stride, bytes_size);
             ptr_func_glVariantPointerEXT(id, type, stride,
                                          process->current_state->
@@ -2451,7 +2463,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->interleavedArraysSize);
             memcpy(process->current_state->interleavedArrays + offset,
                    (void *) args[4], bytes_size);
-            // fprintf(stderr, "glInterleavedArrays_fake_func format=%d,
+            // DEBUGF( "glInterleavedArrays_fake_func format=%d,
             // stride=%d, byte_size=%d\n", format, stride, bytes_size);
             ptr_func_glInterleavedArrays(format, stride,
                                          process->current_state->
@@ -2471,7 +2483,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         process->current_state->elementPointerATISize);
             memcpy(process->current_state->elementPointerATI,
                    (void *) args[2], bytes_size);
-            // fprintf(stderr, "glElementPointerATI_fake_func type=%d,
+            // DEBUGF( "glElementPointerATI_fake_func type=%d,
             // byte_size=%d\n", type, bytes_size);
             ptr_func_glElementPointerATI(type,
                                          process->current_state->
@@ -2492,7 +2504,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         bytes_size);
             memcpy(process->current_state->texCoordPointer[0],
                    (void *) args[4], bytes_size);
-            /* fprintf(stderr, "glTexCoordPointer01_fake_func size=%d,
+            /* DEBUGF( "glTexCoordPointer01_fake_func size=%d,
              * type=%d, stride=%d, byte_size=%d\n", size, type, stride,
              * bytes_size); */
             do_glClientActiveTextureARB(GL_TEXTURE0_ARB + 0);
@@ -2520,7 +2532,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                         bytes_size);
             memcpy(process->current_state->texCoordPointer[0],
                    (void *) args[4], bytes_size);
-            /* fprintf(stderr, "glTexCoordPointer012_fake_func size=%d,
+            /* DEBUGF( "glTexCoordPointer012_fake_func size=%d,
              * type=%d, stride=%d, byte_size=%d\n", size, type, stride,
              * bytes_size); */
             do_glClientActiveTextureARB(GL_TEXTURE0_ARB + 0);
@@ -3075,14 +3087,15 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             glDrawElements(args[0], args[1], args[2], (void *) args[3]);
             break;
         }
-
+#ifndef _WIN32
+    //FIXME
     case _glDrawRangeElements_buffer_func:
         {
             glDrawRangeElements(args[0], args[1], args[2], args[3], args[4],
                                 (void *) args[5]);
             break;
         }
-
+#endif
     case _glMultiDrawElements_buffer_func:
         {
             GET_EXT_PTR(void, glMultiDrawElements,
@@ -3198,20 +3211,20 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
         /* 
          * case glEnableClientState_func: { if (display_function_call)
-         * fprintf(stderr, "cap : %s\n", nameArrays[args[0] -
+         * DEBUGF( "cap : %s\n", nameArrays[args[0] -
          * GL_VERTEX_ARRAY]); glEnableClientState(args[0]); break; }
          * 
          * case glDisableClientState_func: { if (display_function_call)
-         * fprintf(stderr, "cap : %s\n", nameArrays[args[0] -
+         * DEBUGF( "cap : %s\n", nameArrays[args[0] -
          * GL_VERTEX_ARRAY]); glDisableClientState(args[0]); break; }
          * 
          * case glClientActiveTexture_func: case
          * glClientActiveTextureARB_func: { if (display_function_call)
-         * fprintf(stderr, "client activeTexture %d\n", args[0] -
+         * DEBUGF( "client activeTexture %d\n", args[0] -
          * GL_TEXTURE0_ARB); glClientActiveTextureARB(args[0]); break; }
          * 
          * case glActiveTextureARB_func: { if (display_function_call)
-         * fprintf(stderr, "server activeTexture %d\n", args[0] -
+         * DEBUGF( "server activeTexture %d\n", args[0] -
          * GL_TEXTURE0_ARB); glActiveTextureARB(args[0]); break; }
          * 
          * case glLockArraysEXT_func: break;
@@ -3277,13 +3290,13 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         }
 
     default:
-        fprintf(stderr, "unexpected ret type : %d\n", ret_type);
+        DEBUGF( "unexpected ret type : %d\n", ret_type);
         exit(-1);
         break;
     }
 
     if (display_function_call)
-        fprintf(stderr, "[%d]< %s\n", process->p.process_id,
+        DEBUGF( "[%d]< %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
 
     return ret.i;

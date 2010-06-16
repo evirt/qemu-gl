@@ -322,6 +322,36 @@ int glo_surface_makecurrent(GloSurface *surface) {
   }
 }
 
+void glo_surface_getcontents(GloSurface *surface, int stride, int type, void *data) {
+    if (!surface) return;
+//    int bpp = glo_flags_get_bytes_per_pixel(surface->context->formatFlags);
+//    int rowsize = surface->width*bpp;
+    int glFormat, glType;
+    glo_flags_get_readpixel_type(surface->context->formatFlags, &glFormat, &glType);
+    if(type == 32) // FIXMEIM HACK!!!!
+      glFormat = GL_BGRA;
+    else
+      glFormat = GL_BGR;
+
+    // unflipped
+    GLubyte *b = (GLubyte *)data;
+    GLubyte *c = &((GLubyte *)data)[stride*(surface->height-1)];
+    GLubyte *tmp = (GLubyte*)malloc(stride);
+    int irow;
+    //printf("DP 0x%08X 0x%08X\n", glFormat, glType);
+    //glPixelStorei(GL_PACK_ALIGNMENT, 4);//FIXMEIM - calculate ?
+    glReadPixels(0, 0, surface->width, surface->height, glFormat, glType, data);
+    for(irow = 0; irow < surface->height/2; irow++) {
+        memcpy(tmp, b, stride);
+        memcpy(b, c, stride);
+        memcpy(c, tmp, stride);
+        b += stride;
+        c -= stride;
+    }
+    free(tmp);
+}
+
+#if 0
 /* Get the contents of the given surface */
 void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
     int bpp = glo_flags_get_bytes_per_pixel(surface->context->formatFlags);
@@ -352,6 +382,7 @@ void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
     free(tmp);
 #endif
 }
+#endif
 
 /* Return the width and height of the given surface */
 void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
