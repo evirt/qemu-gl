@@ -1461,7 +1461,7 @@ int main(int argc, char* argv[])
   }
 
   fprintf(server_stub, "    default:\n");
-  fprintf(server_stub, "      fprintf(stderr, \"unknown=%%d\", func_number);\n");
+  fprintf(server_stub, "      DEBUGF(\"unknown=%%d\", func_number);\n");
   fprintf(server_stub, "      break;\n");
   fprintf(server_stub, "  }\n");
   fprintf(server_stub, "}\n");

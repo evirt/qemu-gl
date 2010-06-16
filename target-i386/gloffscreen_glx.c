@@ -64,6 +64,8 @@ struct _GloSurface {
   XShmSegmentInfo       shminfo;
 };
 
+extern void glo_surface_getcontents_readpixels(int formatFlags, int stride, int bpp,
+                             int width, int height, void *data);
 /* ------------------------------------------------------------------------ */
 
 /* Initialise gloffscreen */
@@ -246,12 +248,14 @@ int glo_surface_makecurrent(GloSurface *surface) {
     return ret;
 }
 
-//#define geti(a) \
-//   do { \
-//      int b; \
-//      glGetIntegerv(a, &b); \
-//      fprintf(stderr, "%s: %d\n", #a, b); \
-//   } while (0);
+/*
+#define geti(a) \
+   do { \
+      int b; \
+      glGetIntegerv(a, &b); \
+      fprintf(stderr, "%s: %d\n", #a, b); \
+   } while (0);
+*/
 
 /* Get the contents of the given surface */
 void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *data) {
