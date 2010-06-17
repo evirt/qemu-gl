@@ -185,7 +185,7 @@ void glo_kill(void) {
 /* ------------------------------------------------------------------------ */
 
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
-GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
+GloContext *glo_context_create(int formatFlags, GloSurface *shareLists) {
     GloContext *context;
     // pixel format attributes
     int          pf_attri[] = {
@@ -250,7 +250,7 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
 
     if (shareLists) {
       // Need to share lists...
-      wglShareLists(shareLists->hContext, context->hContext);
+      wglShareLists(shareLists->context->hContext, context->hContext);
     }
 
     return context;
@@ -328,67 +328,16 @@ int glo_surface_makecurrent(GloSurface *surface) {
   }
 }
 
-void glo_surface_getcontents(GloSurface *surface, int stride, int type, void *data) {
-    if (!surface) return;
-//    int bpp = glo_flags_get_bytes_per_pixel(surface->context->formatFlags);
-//    int rowsize = surface->width*bpp;
-    int glFormat, glType;
-    glo_flags_get_readpixel_type(surface->context->formatFlags, &glFormat, &glType);
-    if(type == 32) // FIXMEIM HACK!!!!
-      glFormat = GL_BGRA;
-    else
-      glFormat = GL_BGR;
-
-    // unflipped
-    GLubyte *b = (GLubyte *)data;
-    GLubyte *c = &((GLubyte *)data)[stride*(surface->height-1)];
-    GLubyte *tmp = (GLubyte*)malloc(stride);
-    int irow;
-    //printf("DP 0x%08X 0x%08X\n", glFormat, glType);
-    //glPixelStorei(GL_PACK_ALIGNMENT, 4);//FIXMEIM - calculate ?
-    glReadPixels(0, 0, surface->width, surface->height, glFormat, glType, data);
-    for(irow = 0; irow < surface->height/2; irow++) {
-        memcpy(tmp, b, stride);
-        memcpy(b, c, stride);
-        memcpy(c, tmp, stride);
-        b += stride;
-        c -= stride;
-    }
-    free(tmp);
-}
-
-#if 0
 /* Get the contents of the given surface */
-void glo_surface_getcontents(GloSurface *surface, int stride, void *data) {
-    int bpp = glo_flags_get_bytes_per_pixel(surface->context->formatFlags);
-    int rowsize = surface->width*bpp;
-    int glFormat, glType;
-    glo_flags_get_readpixel_type(surface->context->formatFlags, &glFormat, &glType);
-#ifdef GETCONTENTS_INDIVIDUAL
-    GLubyte *b = (GLubyte *)data;
-    int irow;
-    for(irow = surface->height-1 ; irow >= 0 ; irow--) {
-        glReadPixels(0, irow, surface->width, 1, glFormat, glType, b);
-        b += rowsize;
-    }
-#else
-    // unflipped
-    GLubyte *b = (GLubyte *)data;
-    GLubyte *c = &((GLubyte *)data)[rowsize*(surface->height-1)];
-    GLubyte *tmp = (GLubyte*)malloc(rowsize);
-    int irow;
-    glReadPixels(0, 0, surface->width, surface->height, glFormat, glType, data);
-    for(irow = 0; irow < surface->height/2; irow++) {
-        memcpy(tmp, b, rowsize);
-        memcpy(b, c, rowsize);
-        memcpy(c, tmp, rowsize);
-        b += rowsize;
-        c -= rowsize;
-    }
-    free(tmp);
-#endif
+void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *data) {
+
+  if (!surface)
+    return;
+  // Compatible / fallback method.
+  glo_surface_getcontents_readpixels(surface->context->formatFlags,
+                                        stride, bpp, surface->width,
+                                        surface->height, data);
 }
-#endif
 
 /* Return the width and height of the given surface */
 void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
