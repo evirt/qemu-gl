@@ -2558,6 +2558,11 @@ if test "$target_softmmu" = "yes" ; then
     if test "$gl" = "yes" ; then
       echo "CONFIG_GL=y" >> $config_target_mak
       cflags="-DTARGET_OPENGL_OK $cflags "
+      if test "$mingw32" = "yes" ; then
+        echo "LIBS+=-lopengl32 -lglu32" >> $config_host_mak
+      else
+        echo "LIBS+=-lGL -lGLU" >> $config_host_mak
+      fi
     fi
   ;;
   esac

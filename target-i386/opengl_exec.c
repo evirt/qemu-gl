@@ -150,6 +150,8 @@ void qemu_free(void *ptr);
 #include <dlfcn.h>
 #endif
 
+
+#ifdef _WIN32
 static const char* KNOWN_GL_FUNCTIONS =
 {
 "glAccum\0"
@@ -1867,6 +1869,7 @@ static void *wglGetProcAddressFunc(const char *name) {
     }
     return res;
 }
+#endif // _WIN32
 
 static void *get_glu_ptr(const char *name)
 {
