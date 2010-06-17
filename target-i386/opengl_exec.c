@@ -2612,7 +2612,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 tab_opengl_calls_name[func_number]);
     }
 
-#if 1
+#if 0
     if(func_number != glXSwapBuffers_func &&
        func_number != glXMakeCurrent_func && 1/*tab_opengl_calls_name[func_number][2] == 'X'*/)
 	DEBUGF( "[%d]> %s\n", process->p.process_id,
