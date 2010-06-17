@@ -110,9 +110,9 @@ const GLXFBConfig FBCONFIGS[] = {
 };
 
 
-#define FGLX_VERSION_STRING "1.1"
+#define FGLX_VERSION_STRING "1.2"
 #define FGLX_VERSION_MAJOR 1
-#define FGLX_VERSION_MINOR 1
+#define FGLX_VERSION_MINOR 2
 
 
 void *qemu_malloc(size_t size);
@@ -124,6 +124,8 @@ void qemu_free(void *ptr);
 #ifdef _WIN32
 #define GL_GETPROCADDRESS(X) wglGetProcAddressFunc(X)
 #else
+typedef void (*__GLXextFuncPtr)(void);
+extern __GLXextFuncPtr glXGetProcAddressARB (const GLubyte *);
 #define GL_GETPROCADDRESS(X) glXGetProcAddressARB(X)
 #endif
 
@@ -2325,16 +2327,25 @@ static int glXGetFBConfigAttribFunc(const GLXFBConfig *fbconfig, int attrib, int
 }
 
 static const GLXFBConfig *glXChooseFBConfigFunc(int screen, const int *attrib_list, int *nelements) {
-  int formatFlags;
-  int i;
-
   if (attrib_list != NULL) {
-    formatFlags = glo_flags_get_from_glx(attrib_list, False);
-    for (i=0;i<DIM(FBCONFIGS);i++)
-      if (FBCONFIGS[i].formatFlags == formatFlags) {
-        if (nelements) *nelements=1;
-        return &FBCONFIGS[i];
+    int formatFlags = glo_flags_get_from_glx(attrib_list, False);
+    int i;
+    int bestConfig = 0;
+    int bestScore = -1;
+
+    for (i=0;i<DIM(FBCONFIGS);i++) {
+      int score = glo_flags_score(formatFlags, FBCONFIGS[i].formatFlags);
+      if (bestScore < 0 || score<=bestScore) {
+        bestScore = score;
+        bestConfig = i;
       }
+    }
+
+    if (bestScore > 0)
+      DEBUGF( "Got format flags %d but we couldn't find an exactly matching config, chose %d\n", formatFlags, bestConfig);
+    DEBUGF( "glXChooseVisualFunc chose %d, format %d\n", bestConfig, FBCONFIGS[bestConfig].formatFlags);
+    if (nelements) *nelements=1;
+    return &FBCONFIGS[bestConfig];
   }
 
   if (nelements) *nelements=0;
@@ -3382,9 +3393,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case glXGetProcAddress_fake_func:
         {
 //            if (display_function_call)
-            DEBUGF( "glXGetProcAddress %s  ", (char *) args[0]);
+            //DEBUGF( "glXGetProcAddress %s  ", (char *) args[0]);
             ret.i = GL_GETPROCADDRESS((const GLubyte *) args[0]) != NULL;
-                DEBUGF( " == %08x\n", ret.i);
+            //   DEBUGF( " == %08x\n", ret.i);
             ret.i = 0;
             break;
         }
@@ -3398,7 +3409,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
             for (i = 0; i < nbElts; i++) {
                 int len = strlen(huge_buffer);
-                DEBUGF( "glXGetProcAddress_global %s  ", (char *)huge_buffer);
+                //DEBUGF( "glXGetProcAddress_global %s  ", (char *)huge_buffer);
                 result[i] =
                     GL_GETPROCADDRESS((const GLubyte *) huge_buffer) !=
                     NULL;
