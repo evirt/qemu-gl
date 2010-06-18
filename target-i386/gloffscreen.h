@@ -63,6 +63,9 @@ extern void glo_init(void);
 /* Uninitialise gloffscreen */
 extern void glo_kill(void);
 
+/* Like wglGetProcAddress/glxGetProcAddress */
+extern void *glo_getprocaddress(const char *procName);
+
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
 extern GloContext *glo_context_create(int formatFlags, GloContext *shareLists);
 

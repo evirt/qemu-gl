@@ -94,6 +94,13 @@ void glo_kill(void) {
     glo.dpy = NULL;
 }
 
+
+/* Like wglGetProcAddress/glxGetProcAddress */
+void *glo_getprocaddress(const char *procName) {
+    if (!glo_inited)
+      glo_init();
+    return glxGetProcAddress(procName);
+}
 /* ------------------------------------------------------------------------ */
 
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
