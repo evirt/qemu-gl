@@ -62,33 +62,11 @@ struct __GLXFBConfigRec {
   int formatFlags;
 };
 
+// #defines from glx.h
 #define GLX_VENDOR              1
 #define GLX_VERSION             2
 #define GLX_EXTENSIONS          3
-
-#define GLX_USE_GL      1
-#define GLX_BUFFER_SIZE     2
-#define GLX_LEVEL       3
-#define GLX_RGBA        4
 #define GLX_DOUBLEBUFFER    5
-#define GLX_STEREO      6
-#define GLX_AUX_BUFFERS     7
-#define GLX_RED_SIZE        8
-#define GLX_GREEN_SIZE      9
-#define GLX_BLUE_SIZE       10
-#define GLX_ALPHA_SIZE      11
-#define GLX_DEPTH_SIZE      12
-#define GLX_STENCIL_SIZE    13
-#define GLX_ACCUM_RED_SIZE  14
-#define GLX_ACCUM_GREEN_SIZE    15
-#define GLX_ACCUM_BLUE_SIZE 16
-#define GLX_ACCUM_ALPHA_SIZE    17
-/*
- * GLX 1.4 and later:
- */
-#define GLX_SAMPLE_BUFFERS              0x186a0 /*100000*/
-#define GLX_SAMPLES                     0x186a1 /*100001*/
-// FIXME
 
 /* We'll say the XVisual Id is actually just an index into here */
 const GLXFBConfig FBCONFIGS[] = {
@@ -109,11 +87,9 @@ const GLXFBConfig FBCONFIGS[] = {
     {GLO_FF_BITS_16|GLO_FF_DEPTH_24|GLO_FF_STENCIL_8},*/
 };
 
-
 #define FGLX_VERSION_STRING "1.2"
 #define FGLX_VERSION_MAJOR 1
 #define FGLX_VERSION_MINOR 2
-
 
 void *qemu_malloc(size_t size);
 void *qemu_realloc(void *ptr, size_t size);
@@ -127,7 +103,7 @@ void qemu_free(void *ptr);
       if (detect_##funcname == 0) \
       { \
         detect_##funcname = 1; \
-        ptr_func_##funcname = (type(*)args_decl)glo_getprocaddress((const GLubyte*)#funcname); \
+        ptr_func_##funcname = (type(*)args_decl)glo_getprocaddress((const char*)#funcname); \
         assert (ptr_func_##funcname); \
       }
 
@@ -137,8 +113,12 @@ void qemu_free(void *ptr);
       if (detect_##funcname == 0) \
       { \
         detect_##funcname = 1; \
-        ptr_func_##funcname = (type(*)args_decl)glo_getprocaddress((const GLubyte*)#funcname); \
+        ptr_func_##funcname = (type(*)args_decl)glo_getprocaddress((const char*)#funcname); \
       }
+
+#ifndef WIN32
+#include <dlfcn.h>
+#endif
 
 static void *get_glu_ptr(const char *name)
 {
@@ -1661,7 +1641,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         {
 //            if (display_function_call)
             //DEBUGF( "glXGetProcAddress %s  ", (char *) args[0]);
-            ret.i = glo_getprocaddress((const GLubyte *) args[0]) != NULL;
+            ret.i = glo_getprocaddress((const char *) args[0]) != NULL;
             //   DEBUGF( " == %08x\n", ret.i);
             ret.i = 0;
             break;
@@ -1678,7 +1658,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 int len = strlen(huge_buffer);
                 //DEBUGF( "glXGetProcAddress_global %s  ", (char *)huge_buffer);
                 result[i] =
-                    glo_getprocaddress((const GLubyte *) huge_buffer) !=
+                    glo_getprocaddress((const char *) huge_buffer) !=
                     NULL;
                 huge_buffer += len + 1;
             }

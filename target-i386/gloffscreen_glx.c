@@ -99,7 +99,7 @@ void glo_kill(void) {
 void *glo_getprocaddress(const char *procName) {
     if (!glo_inited)
       glo_init();
-    return glxGetProcAddress(procName);
+    return glXGetProcAddressARB(procName);
 }
 /* ------------------------------------------------------------------------ */
 
