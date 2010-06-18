@@ -68,6 +68,10 @@ extern void glo_surface_getcontents_readpixels(int formatFlags, int stride, int 
                              int width, int height, void *data);
 /* ------------------------------------------------------------------------ */
 
+int glo_initialised(void) {
+  return glo_inited;
+}
+
 /* Initialise gloffscreen */
 void glo_init(void) {
     if (glo_inited) {

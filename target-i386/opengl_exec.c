@@ -1858,8 +1858,12 @@ static void *wglGetProcAddressFunc(const char *name) {
         (!strcmp(name, "glXQueryDrawable")) ||
         (!strcmp(name, "glXGetVisualFromFBConfig")))
         return (void*)1; */// just ANYTHING nonzero will do
-    void *res = wglGetProcAddress(name);
-    if (res==0) {
+
+
+    void *res;
+    if (!glo_initialised()) glo_init();
+    res = wglGetProcAddress(name);
+    /*if (res==0) {
         const char *p = KNOWN_GL_FUNCTIONS;
         while (*p) {
             if (!strcmp(name, p))
@@ -1868,7 +1872,7 @@ static void *wglGetProcAddressFunc(const char *name) {
             while (*p) p++;
             p++;
         }
-    }
+    }*/
     return res;
 }
 #endif // _WIN32

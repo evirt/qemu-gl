@@ -84,6 +84,10 @@ extern void glo_surface_getcontents_readpixels(int formatFlags, int stride, int 
                              int width, int height, void *data);
 /* ------------------------------------------------------------------------ */
 
+int glo_initialised(void) {
+  return glo_inited;
+}
+
 /* Initialise gloffscreen */
 void glo_init(void) {
     WNDCLASSEX wcx;
@@ -162,6 +166,8 @@ void glo_init(void) {
       printf( "Unable to load the required WGL extensions\n" );
       exit( EXIT_FAILURE );
     }
+
+    glo_inited = 1;
 }
 
 /* Uninitialise gloffscreen */
