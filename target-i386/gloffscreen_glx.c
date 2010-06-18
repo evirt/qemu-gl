@@ -68,6 +68,10 @@ extern void glo_surface_getcontents_readpixels(int formatFlags, int stride, int 
                              int width, int height, void *data);
 /* ------------------------------------------------------------------------ */
 
+int glo_initialised(void) {
+  return glo_inited;
+}
+
 /* Initialise gloffscreen */
 void glo_init(void) {
     if (glo_inited) {
@@ -90,6 +94,13 @@ void glo_kill(void) {
     glo.dpy = NULL;
 }
 
+
+/* Like wglGetProcAddress/glxGetProcAddress */
+void *glo_getprocaddress(const char *procName) {
+    if (!glo_inited)
+      glo_init();
+    return glXGetProcAddressARB((const GLubyte *) procName);
+}
 /* ------------------------------------------------------------------------ */
 
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */

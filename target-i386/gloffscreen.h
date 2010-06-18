@@ -54,11 +54,17 @@ typedef struct _GloSurface GloSurface;
 /* The only currently supported format */
 #define GLO_FF_DEFAULT     (GLO_FF_BITS_24|GLO_FF_DEPTH_24)//(GLO_FF_BITS_32|GLO_FF_ALPHA)
 
+/* Has gloffscreen been previously initialised? */
+extern int glo_initialised(void);
+
 /* Initialise gloffscreen */
 extern void glo_init(void);
 
 /* Uninitialise gloffscreen */
 extern void glo_kill(void);
+
+/* Like wglGetProcAddress/glxGetProcAddress */
+extern void *glo_getprocaddress(const char *procName);
 
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
 extern GloContext *glo_context_create(int formatFlags, GloContext *shareLists);
