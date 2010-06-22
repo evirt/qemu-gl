@@ -53,7 +53,9 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 // FIXME
 typedef int Bool;
 typedef int XID;
+#ifdef ALLOW_PBUFFER
 typedef struct Display Display;
+#endif
 const Bool True = 1;
 const Bool False = 0;
 const int None = 0;
@@ -66,7 +68,6 @@ struct __GLXFBConfigRec {
 #define GLX_VENDOR              1
 #define GLX_VERSION             2
 #define GLX_EXTENSIONS          3
-#define GLX_DOUBLEBUFFER    5
 
 /* We'll say the XVisual Id is actually just an index into here */
 const GLXFBConfig FBCONFIGS[] = {
@@ -1208,14 +1209,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 *(int *) args[3] = 0;
                 ret.i = 0;
             } else {
-                int *attrib_list = (int *) args[2];
-		while (*attrib_list != None) {
-			if(*attrib_list == GLX_DOUBLEBUFFER) {
-				DEBUGF( "Squashing doublebuffered visual\n");
-				*(attrib_list+1) = False;
-			}
-			attrib_list += 2;
-		}
                 const GLXFBConfig *fbconfigs =
                     glXChooseFBConfigFunc(args[1], (int *) args[2], (int *) args[3]);
                 if (fbconfigs) {
