@@ -50,15 +50,14 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 #include "gloffscreen.h"
 
 
-// FIXME
+/** Misc X11/GLX defines - we don't want to include the whole files for these
+ * as we need them on Windows too */
 typedef int Bool;
-typedef int XID;
 #ifdef ALLOW_PBUFFER
 typedef struct Display Display;
 #endif
 const Bool True = 1;
 const Bool False = 0;
-const int None = 0;
 typedef struct __GLXFBConfigRec GLXFBConfig;
 struct __GLXFBConfigRec {
   int formatFlags;
