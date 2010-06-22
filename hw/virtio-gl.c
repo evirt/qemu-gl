@@ -12,51 +12,81 @@
  */
 
 #include "hw.h"
-//#include "qemu-char.h"
 #include "virtio.h"
-//#include "virtio-rng.h"
-//#include "rng.h"
 #include <sys/time.h>
+
+int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer);
+
 
 typedef struct VirtIOGL
 {
     VirtIODevice vdev;
     VirtQueue *vq;
-//    CharDriverState *chr;
-//    struct timeval last;
-//    int rate;
-//    int egd;
-//    int entropy_remaining;
-//    int pool;
 } VirtIOGL;
 
-extern int virtio_opengl_link(char *buffer);
+#define SIZE_OUT_HEADER (4*3)
+#define SIZE_IN_HEADER 4
 
 static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
 {
-	VirtQueueElement elem;
+    VirtQueueElement elem;
 
-//	fprintf(stderr, "handle_gl\n");
-    while (virtqueue_pop(vq, &elem)) {
-        size_t ret;
+    while(virtqueue_pop(vq, &elem)) {
+        int i;
+        int length = ((int*)elem.out_sg[0].iov_base)[1];
+        int r_length = ((int*)elem.out_sg[0].iov_base)[2];
+	int ret = 0;
+        char *buffer, *ptr;
+        char *r_buffer = NULL;
+	int *i_buffer;
 
-        /* The guest always sends only one sg */
-//        fprintf(stderr, " %08x %d\n", (unsigned int)(long)elem.out_sg[0].iov_base,
-//                                    (int)elem.out_sg[0].iov_len);
+	if(length < SIZE_OUT_HEADER || r_length < SIZE_IN_HEADER)
+		goto done;
 
-//	fprintf(stderr, "%s\n", (char *)elem.out_sg[0].iov_base);
-	virtio_opengl_link((char *)elem.out_sg[0].iov_base);
-	
-	ret = elem.out_sg[0].iov_len;
+	buffer = malloc(length);
+        r_buffer = malloc(r_length);
+	ptr = buffer;
+        i_buffer = (int*)buffer;
 
+        i = 0;
+        while(length){
+            int next = length;
+            if(next > elem.out_sg[i].iov_len)
+                next = elem.out_sg[i].iov_len;
+            memcpy(ptr, (char *)elem.out_sg[i].iov_base, next);
+            ptr += next;
+            ret += next;
+            i++;
+            length -= next;
+        }
+
+        *(int*)r_buffer = decode_call_int(i_buffer[0], /* pid */
+                        buffer + SIZE_OUT_HEADER, /* command_buffer */
+                        i_buffer[1] - SIZE_OUT_HEADER, /* cmd buffer length */
+                        r_buffer + SIZE_IN_HEADER);    /* return buffer */
+
+        free(buffer);
+
+	if(r_length)
+		ret = r_length;
+        i = 0;
+        ptr = r_buffer;
+        while(r_length) {
+            int next = r_length;
+            if(next > elem.in_sg[i].iov_len)
+                next = elem.in_sg[i].iov_len;
+            memcpy(elem.in_sg[i].iov_base, ptr, next);
+            ptr += next;
+            r_length -= next;
+            i++;
+        }
+
+        free(r_buffer);
+done:
         virtqueue_push(vq, &elem, ret);
+
+        virtio_notify(vdev, vq);
     }
-    virtio_notify(vdev, vq);
-
-    // Write the result back...
-
-
-
 }
 
 static uint32_t virtio_gl_get_features(VirtIODevice *vdev, uint32_t f)
@@ -95,21 +125,6 @@ VirtIODevice *virtio_gl_init(DeviceState *dev)
     s->vdev.get_features = virtio_gl_get_features;
 
     s->vq = virtio_add_queue(&s->vdev, 128, virtio_gl_handle);
-//    s->chr = rngdev->chrdev;
- //   s->rate = rngdev->rate;
-//    gettimeofday(&s->last, NULL);
-
-//    if(rngdev->proto && !strncmp(rngdev->proto, "egd", 3))
-//        s->egd = 1;
-
-#ifdef DEBUG
-//    printf("entropy being read from %s", rngdev->chrdev->label);
-//    if(s->rate)
-//        printf(" at %d bytes/sec max.", s->rate);
-//    printf(" protocol: %s\n", s->egd?"egd":"raw");
-#endif
-
-//    qemu_chr_add_handlers(s->chr, vgl_can_read, vgl_read, vgl_event, s);
 
     register_savevm("virtio-gl", -1, 1, virtio_gl_save, virtio_gl_load, s);
 
