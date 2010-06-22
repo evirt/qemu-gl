@@ -668,6 +668,7 @@ static int virtio_gl_init_pci(PCIDevice *pci_dev)
                     PCI_DEVICE_ID_VIRTIO_GL,
                     PCI_CLASS_OTHERS,
                     0x00);
+    proxy->host_features |= 1 << VIRTIO_RING_F_INDIRECT_DESC;
 
     return 0;
 }
