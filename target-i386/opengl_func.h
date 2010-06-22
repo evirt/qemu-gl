@@ -22,8 +22,15 @@
  * THE SOFTWARE.
  */
 
+#ifndef INCLUDE_OPENGL_FUNC_H
+#define INCLUDE_OPENGL_FUNC_H
+
 #include "mesa_gl.h"
 #include "mesa_glext.h"
+
+#define NEED_CPU_H
+#include "exec.h"  // For arg_t typedef
+#undef NEED_CPU_H
 
 /* Argument list are internally of a type that can hold a target pointer
  * or a host pointer.  */
@@ -1097,12 +1104,5 @@ static inline int compute_arg_length(FILE *err_file, int func_number,
                   func_number == glBufferDataARB_func || \
                   func_number == glNewObjectBufferATI_func)
 
-#ifdef __amd64__
-#define _init_func _init64_func
-#else
-#ifdef __i386__
-#define _init_func _init32_func
-#else
-#error Unsupported ABI
-#endif
-#endif
+#endif // INCLUDE_OPENGL_FUNC_H
+
