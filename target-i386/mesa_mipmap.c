@@ -19,6 +19,7 @@
  * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include "mesa_glu.h"
 
 #ifdef PC_HEADER
 #include "all.h"
