@@ -942,7 +942,7 @@ void do_disconnect(ProcessState *process)
     int i;
     Display *dpy = process->dpy;
 
-    if(!process->p.argcpy_target_to_host)
+    if(!process->p.wordsize)
         fprintf(stderr, "Likely died prior to init: pid %d\n", process->p.process_id);
     else 
         fprintf("disconnect GL process: %d\n", process->p.process_id);
@@ -1318,7 +1318,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 fprintf(stderr, "glXCreateContext: %08x %08x %08x\n", dpy, ctxt, vis);
 
             if (ctxt) {
-                int fake_ctxt =++ process->next_available_context_number;
+                int fake_ctxt = ++process->next_available_context_number;
 
                 set_association_fakecontext_visual(process, fake_ctxt, vis);
                 set_association_fakecontext_glxcontext(process, fake_ctxt,
