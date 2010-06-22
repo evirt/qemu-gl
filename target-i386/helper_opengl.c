@@ -2,6 +2,7 @@
  *  Host-side implementation of GL/GLX API
  *
  *  Copyright (c) 2006,2007 Even Rouault
+ *  Copyright (c) 2009,2010 Ian Molton <ian.molton@collabora.co.uk>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +22,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #define _XOPEN_SOURCE 600
+
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -30,22 +33,19 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
-#include "exec.h"
-#include "kvm.h"
-
 #include "opengl_func.h"
 #include "opengl_process.h"
+#include "opengl_exec.h"
 
+#include "kvm.h"
 
-extern void init_process_tab(void);
-extern int do_function_call(ProcessStruct *process, int func_number, arg_t *args, char *ret_string);
-
-void do_disconnect(ProcessStruct *process);
-#define disconnect(a) \
-	do_disconnect(a);
-
-ProcessStruct *do_context_switch(pid_t pid, int switch_gl_context);
-
+/* do_decode_call_int()
+ *
+ * Loop through the buffered command stream executing each OpenGL call in
+ * sequence. due to the way calls are buffered, only the last call in the
+ * buffer may have 'out' parameters or a non-void return code. This allows
+ * for efficient buffering whilst avoiding un-necessary buffer flushes.
+ */
 static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int args_len, char *r_buffer)
 {
     Signature *signature;
@@ -182,8 +182,7 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
     return 1;
 }
 
-int decode_call_int(int pid, char *in_args, int args_len,
-                                  char *r_buffer)
+int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer)
 {
     static ProcessStruct *process = NULL;
     static int first;
@@ -195,19 +194,19 @@ int decode_call_int(int pid, char *in_args, int args_len,
         init_process_tab();
     }
 
-    /* Select the appropriate context for this pid if it isnt already active */
-    /* Note: if we're about to execute glXMakeCurrent() then we tell the
-             renderer not to waste its time switching contexts */
+    /* Select the appropriate context for this pid if it isnt already active
+     * Note: if we're about to execute glXMakeCurrent() then we tell the
+     * renderer not to waste its time switching contexts
+     */
+
     if (!process || process->process_id != pid)
-	process = do_context_switch(pid,
-                                    (first_func == glXMakeCurrent_func)?0:1);
+	process =
+           vmgl_context_switch(pid, (first_func == glXMakeCurrent_func)?0:1);
 
     if(unlikely(first_func == _init32_func || first_func == _init64_func)) {
         if(!process->wordsize) {
             process->wordsize = first_func == _init32_func?4:8;
-
-            *(int*)r_buffer = 2; // Return that we can buffer commands
-
+            *(int*)r_buffer = 2; // Indicate that we can buffer commands
             return 1; // Initialisation done
         }
         else {
