@@ -1,3 +1,4 @@
+#include "hw/pci.h"
 #include "rwhandler.h"
 #include "ioport.h"
 #include "cpu-all.h"
