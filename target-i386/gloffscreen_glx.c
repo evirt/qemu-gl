@@ -64,8 +64,9 @@ struct _GloSurface {
   XShmSegmentInfo       shminfo;
 };
 
-extern void glo_surface_getcontents_readpixels(int formatFlags, int stride, int bpp,
-                             int width, int height, void *data);
+extern void glo_surface_getcontents_readpixels(int formatFlags, int stride,
+                                    int bpp, int width, int height, void *data);
+static void glo_test_readback_methods(void);
 /* ------------------------------------------------------------------------ */
 
 int glo_initialised(void) {
@@ -85,7 +86,7 @@ void glo_init(void) {
         exit( EXIT_FAILURE );
     }
     glo_inited = 1;
-    glo.use_ximage = 1;
+    glo_test_readback_methods();
 }
 
 /* Uninitialise gloffscreen */
@@ -346,9 +347,90 @@ void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
       *height = surface->height;
 }
 
+#define TX (17)
+#define TY (16)
+
+static int glo_can_readback(void) {
+    GloContext *context;
+    GloSurface *surface;
+
+    unsigned char *datain = (unsigned char *)malloc(4*TX*TY);
+    unsigned char *datain_flip = (unsigned char *)malloc(4*TX*TY); // flipped input data (for GL)
+    unsigned char *dataout = (unsigned char *)malloc(4*TX*TY);
+    unsigned char *p;
+    int x,y;
+
+    const int bufferAttributes[] = {
+            GLX_RED_SIZE,      8,
+            GLX_GREEN_SIZE,    8,
+            GLX_BLUE_SIZE,     8,
+            GLX_ALPHA_SIZE,    8,
+            GLX_DEPTH_SIZE,    0,
+            GLX_STENCIL_SIZE,  0,
+            0,
+        };
+
+    int bufferFlags = glo_flags_get_from_glx(bufferAttributes, 0);
+    int bpp = glo_flags_get_bytes_per_pixel(bufferFlags);
+    int glFormat, glType;
+
+    memset(datain_flip, 0, TX*TY*4);
+    memset(datain, 0, TX*TY*4);
+
+    p = datain;
+    for (y=0;y<TY;y++) {
+      for (x=0;x<TX;x++) {
+        p[0] = x;
+        p[1] = y;
+        //if (y&1) { p[0]=0; p[1]=0; }
+        if (bpp>2) p[2] = 0;
+        if (bpp>3) p[3] = 0xFF;
+        p+=bpp;
+      }
+      memcpy(&datain_flip[((TY-1)-y)*bpp*TX], &datain[y*bpp*TX], bpp*TX);
+    }
+
+    context = glo_context_create(bufferFlags, 0);
+    surface = glo_surface_create(TX, TY, context);
+
+    glo_surface_makecurrent(surface);
+
+    glClear(GL_COLOR_BUFFER_BIT);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0,TX, 0,TY, 0, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glRasterPos2f(0,0);
+    glo_flags_get_readpixel_type(bufferFlags, &glFormat, &glType);
+    glDrawPixels(TX,TY,glFormat, glType, datain_flip);
+    glFlush();
+
+    memset(dataout, 0, bpp*TX*TY);
+
+    glo_surface_getcontents(surface, TX*4, bpp*8, dataout);
+
+    glo_surface_destroy(surface);
+    glo_context_destroy(context);
+
+    if (memcmp(datain, dataout, bpp*TX*TY)==0)
+        return 1;
+
+    return 0;
+}
+
+static void glo_test_readback_methods(void) {
+    glo.use_ximage = 1;
+    if(!glo_can_readback())
+      glo.use_ximage = 0;
+
+    fprintf(stderr, "VM GL: Using %s readback\n", glo.use_ximage?"XImage":"glReadPixels");
+}
+
 Display *glo_get_dpy(void) {
   if (!glo_inited)
         glo_init();
   return glo.dpy;
 }
+
 #endif

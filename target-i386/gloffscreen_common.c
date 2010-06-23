@@ -33,6 +33,8 @@
 #endif
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // ---------------------------------------------------
 //  Copied from glx.h as we need them in windows too
