@@ -54,9 +54,6 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 /** Misc X11/GLX defines - we don't want to include the whole files for these
  * as we need them on Windows too */
 typedef int Bool;
-#ifdef ALLOW_PBUFFER
-typedef struct Display Display;
-#endif
 const Bool True = 1;
 const Bool False = 0;
 typedef struct __GLXFBConfigRec GLXFBConfig;
@@ -263,9 +260,6 @@ typedef struct {
     ProcessStruct p;
 
     int next_available_context_number;
-#ifdef ALLOW_PBUFFER
-    int next_available_pbuffer_number;
-#endif
 
     int nb_states;
     GLState default_state;
@@ -276,10 +270,6 @@ typedef struct {
     const GLXFBConfig *fbconfigs[MAX_FBCONFIG];
     int fbconfigs_max[MAX_FBCONFIG];
     int nfbconfig_total;
-
-#ifdef ALLOW_PBUFFER
-    Assoc association_fakepbuffer_pbuffer[MAX_ASSOC_SIZE];
-#endif
 
     int primitive;
     int bufsize;
@@ -379,62 +369,6 @@ static inline ClientGLXDrawable to_drawable(arg_t arg)
     return (void *) (unsigned long) arg;
 }
 
-/* ---- */
-
-#ifdef ALLOW_PBUFFER
-GLXPbuffer get_association_fakepbuffer_pbuffer(
-                ProcessState *process, ClientGLXDrawable fakepbuffer)
-{
-    int i;
-
-    for (i = 0; i < MAX_ASSOC_SIZE &&
-                    process->association_fakepbuffer_pbuffer[i].key; i ++)
-        if ((ClientGLXDrawable)
-                        process->association_fakepbuffer_pbuffer[i].key ==
-                        fakepbuffer)
-            return (GLXPbuffer)
-                    process->association_fakepbuffer_pbuffer[i].value;
-
-    return 0;
-}
-
-void set_association_fakepbuffer_pbuffer(ProcessState *process,
-                ClientGLXDrawable fakepbuffer, GLXPbuffer pbuffer)
-{
-    int i;
-
-    for (i = 0;
-         i < MAX_ASSOC_SIZE &&
-         process->association_fakepbuffer_pbuffer[i].key; i++)
-        if ((ClientGLXDrawable)
-                        process->association_fakepbuffer_pbuffer[i].key ==
-                        fakepbuffer)
-            break;
-
-    if (i < MAX_ASSOC_SIZE) {
-        process->association_fakepbuffer_pbuffer[i].key = (void *) fakepbuffer;
-        process->association_fakepbuffer_pbuffer[i].value = (void *) pbuffer;
-    } else
-        DEBUGF( "MAX_ASSOC_SIZE reached\n");
-}
-
-void unset_association_fakepbuffer_pbuffer(ProcessState *process,
-                ClientGLXDrawable fakepbuffer)
-{
-    int i;
-
-    for (i = 0; i < MAX_ASSOC_SIZE &&
-                    process->association_fakepbuffer_pbuffer[i].key; i++)
-        if ((ClientGLXDrawable)
-                        process->association_fakepbuffer_pbuffer[i].key ==
-                        fakepbuffer) {
-            memmove(&process->association_fakepbuffer_pbuffer[i],
-                    &process->association_fakepbuffer_pbuffer[i + 1],
-                    sizeof(Assoc) * (MAX_ASSOC_SIZE - 1 - i));
-            return;
-        }
-}
-#endif
 /* ---- */
 
 /* Bind a qsurface to a context (GLState) */
@@ -772,15 +706,6 @@ GLState *get_glstate_for_fake_ctxt(ProcessState *process, int fake_ctxt)
 void disconnect(ProcessState *process)
 {
     int i;
-#ifdef ALLOW_PBUFFER
-    GET_EXT_PTR(void, glXDestroyPbuffer, (Display *, GLXPbuffer));
-    for (i = 0; i < MAX_ASSOC_SIZE &&
-                    process->association_fakepbuffer_pbuffer[i].key; i ++) {
-        GLXPbuffer pbuffer = (GLXPbuffer)
-                process->association_fakepbuffer_pbuffer[i].value;
-        ptr_func_glXDestroyPbuffer(dpy, pbuffer);
-    }
-#endif
     for (i = 0; i < process->nb_states; i++) {
         destroy_gl_state(process->glstates[i]);
         qemu_free(process->glstates[i]);
@@ -1218,34 +1143,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
-#ifdef ALLOW_PBUFFER
-    case glXChooseFBConfigSGIX_func:
-        {
-            GET_EXT_PTR(GLXFBConfigSGIX *, glXChooseFBConfigSGIX,
-                        (Display *, int, int *, int *));
-            if (process->nfbconfig == MAX_FBCONFIG) {
-                *(int *) args[3] = 0;
-                ret.i = 0;
-            } else {
-                GLXFBConfigSGIX *fbconfigs =
-                    ptr_func_glXChooseFBConfigSGIX(dpy, args[1],
-                                                   (int *) args[2],
-                                                   (int *) args[3]);
-                if (fbconfigs) {
-                    process->fbconfigs[process->nfbconfig] = fbconfigs;
-                    process->fbconfigs_max[process->nfbconfig] =
-                        *(int *) args[3];
-                    process->nfbconfig++;
-                    ret.i = 1 + process->nfbconfig_total;
-                    process->nfbconfig_total +=
-                        process->fbconfigs_max[process->nfbconfig];
-                } else {
-                    ret.i = 0;
-                }
-            }
-            break;
-        }
-#endif
     case glXGetFBConfigs_func:
         {
             if (process->nfbconfig == MAX_FBCONFIG) {
@@ -1268,206 +1165,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
-#ifdef ALLOW_PBUFFER
-    case glXCreatePbuffer_func:
-        {
-            GET_EXT_PTR(GLXPbuffer, glXCreatePbuffer,
-                        (Display *, GLXFBConfig, int *));
-            int client_fbconfig = args[1];
-
-            ret.i = 0;
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
-
-            if (fbconfig) {
-                GLXPbuffer pbuffer =
-                    ptr_func_glXCreatePbuffer(dpy, fbconfig, (int *) args[2]);
-                DEBUGF( "glXCreatePbuffer --> %x\n", (int) pbuffer);
-                if (pbuffer) {
-                    ClientGLXDrawable fake_pbuffer = to_drawable(
-                                    ++ process->next_available_pbuffer_number);
-
-                    set_association_fakepbuffer_pbuffer(
-                                    process, fake_pbuffer, pbuffer);
-                    DEBUGF(
-                            "set_association_fakepbuffer_pbuffer(%p, %x)\n",
-                            fake_pbuffer, (int) (long) pbuffer);
-                    ret.i = (int) (long) fake_pbuffer;
-                }
-            }
-            break;
-        }
-
-    case glXCreateGLXPbufferSGIX_func:
-        {
-            GET_EXT_PTR(GLXPbufferSGIX, glXCreateGLXPbufferSGIX,
-                        (Display *, GLXFBConfig, int, int, int *));
-            int client_fbconfig = args[1];
-
-            ret.i = 0;
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
-
-            if (fbconfig) {
-                GLXPbufferSGIX pbuffer = ptr_func_glXCreateGLXPbufferSGIX(
-                                dpy, fbconfig,
-                                args[2], args[3], (int *) args[4]);
-                if (pbuffer) {
-                    ClientGLXDrawable fake_pbuffer = to_drawable(
-                                    ++ process->next_available_pbuffer_number);
-
-                    set_association_fakepbuffer_pbuffer(
-                                    process, fake_pbuffer, pbuffer);
-                    ret.i = (int) (long) fake_pbuffer;
-                }
-            }
-            break;
-        }
-
-    case glXDestroyPbuffer_func:
-        {
-            GET_EXT_PTR(void, glXDestroyPbuffer, (Display *, GLXPbuffer));
-            ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
-
-            if (display_function_call)
-                DEBUGF( "fake_pbuffer=%p\n", fake_pbuffer);
-
-            GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
-                            process, fake_pbuffer);
-            if (pbuffer == 0) {
-                DEBUGF( "invalid fake_pbuffer (%p) !\n",
-                                fake_pbuffer);
-            } else {
-                if (!is_gl_vendor_ati(dpy))
-                    ptr_func_glXDestroyPbuffer(dpy, pbuffer);
-                unset_association_fakepbuffer_pbuffer(process, fake_pbuffer);
-            }
-            break;
-        }
-
-    case glXDestroyGLXPbufferSGIX_func:
-        {
-            GET_EXT_PTR(void, glXDestroyGLXPbufferSGIX,
-                        (Display *, GLXPbuffer));
-            ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
-
-            if (display_function_call)
-                DEBUGF( "fake_pbuffer=%p\n", fake_pbuffer);
-
-            GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
-                            process, fake_pbuffer);
-            if (pbuffer == 0) {
-                DEBUGF( "invalid fake_pbuffer (%p)  !\n",
-                        fake_pbuffer);
-            } else {
-                if (!is_gl_vendor_ati(dpy))
-                    ptr_func_glXDestroyGLXPbufferSGIX(dpy, pbuffer);
-                unset_association_fakepbuffer_pbuffer(process, fake_pbuffer);
-            }
-            break;
-        }
-    case glXQueryGLXPbufferSGIX_func:
-        {
-            GET_EXT_PTR(int, glXQueryGLXPbufferSGIX,
-                        (Display *, GLXFBConfigSGIX, int, int *));
-            int client_fbconfig = args[1];
-
-            ret.i = 0;
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
-
-            if (fbconfig)
-                ret.i = ptr_func_glXQueryGLXPbufferSGIX(dpy,
-                                (GLXFBConfigSGIX) fbconfig,
-                                args[2], (int *) args[3]);
-            break;
-        }
-    case glXBindTexImageATI_func:
-        {
-            GET_EXT_PTR(void, glXBindTexImageATI,
-                        (Display *, GLXPbuffer, int));
-            ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
-
-            if (display_function_call)
-                DEBUGF( "fake_pbuffer=%p\n",
-                                fake_pbuffer);
-
-            GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
-                                process, fake_pbuffer);
-            if (pbuffer == 0) {
-                DEBUGF(
-                        "glXBindTexImageATI : invalid fake_pbuffer (%p) !\n",
-                        fake_pbuffer);
-            } else {
-                ptr_func_glXBindTexImageATI(dpy, pbuffer, args[2]);
-            }
-            break;
-        }
-
-    case glXReleaseTexImageATI_func:
-        {
-            GET_EXT_PTR(void, glXReleaseTexImageATI,
-                        (Display *, GLXPbuffer, int));
-            ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
-
-            if (display_function_call)
-                DEBUGF( "fake_pbuffer=%d\n",
-                                (int) (long) fake_pbuffer);
-
-            GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
-                            process, fake_pbuffer);
-            if (pbuffer == 0) {
-                DEBUGF(
-                        "glXReleaseTexImageATI : invalid fake_pbuffer (%d) !\n",
-                        (int) (long) fake_pbuffer);
-            } else {
-                ptr_func_glXReleaseTexImageATI(dpy, pbuffer, args[2]);
-            }
-            break;
-        }
-
-    case glXBindTexImageARB_func:
-        {
-            GET_EXT_PTR(Bool, glXBindTexImageARB,
-                        (Display *, GLXPbuffer, int));
-            ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
-
-            if (display_function_call)
-                DEBUGF( "fake_pbuffer=%p\n", fake_pbuffer);
-
-            GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
-                            process, fake_pbuffer);
-            if (pbuffer == 0) {
-                DEBUGF(
-                        "glXBindTexImageARB : invalid fake_pbuffer (%p) !\n",
-                        fake_pbuffer);
-                ret.i = 0;
-            } else {
-                ret.i = ptr_func_glXBindTexImageARB(dpy, pbuffer, args[2]);
-            }
-            break;
-        }
-
-    case glXReleaseTexImageARB_func:
-        {
-            GET_EXT_PTR(Bool, glXReleaseTexImageARB,
-                        (Display *, GLXPbuffer, int));
-            ClientGLXDrawable fake_pbuffer = to_drawable(args[1]);
-
-            if (display_function_call)
-                DEBUGF( "fake_pbuffer=%p\n", fake_pbuffer);
-
-            GLXPbuffer pbuffer = get_association_fakepbuffer_pbuffer(
-                            process, fake_pbuffer);
-            if (pbuffer == 0) {
-                DEBUGF(
-                        "glXReleaseTexImageARB : invalid fake_pbuffer (%p) !\n",
-                        fake_pbuffer);
-                ret.i = 0;
-            } else {
-                ret.i =
-                    ptr_func_glXReleaseTexImageARB(dpy, pbuffer, args[2]);
-            }
-            break;
-        }
-#endif
     case glXGetFBConfigAttrib_func:
         {
             int client_fbconfig = args[1];
@@ -1501,25 +1198,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             }
             break;
         }
-#ifdef ALLOW_PBUFFER
-    case glXGetFBConfigAttribSGIX_func:
-        {
-            GET_EXT_PTR(int, glXGetFBConfigAttribSGIX,
-                        (Display *, GLXFBConfigSGIX, int, int *));
-            int client_fbconfig = args[1];
-
-            ret.i = 0;
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
-
-            if (fbconfig)
-                ret.i =
-                    ptr_func_glXGetFBConfigAttribSGIX(dpy,
-                                                      (GLXFBConfigSGIX)
-                                                      fbconfig, args[2],
-                                                      (int *) args[3]);
-            break;
-        }
-#endif
     case glXQueryContext_func:
         {
             DEBUGF( "glXQueryContext not implemented\n");
@@ -1572,34 +1250,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
             break;
         }
-#ifdef ALLOW_PBUFFER
-    case glXCreateContextWithConfigSGIX_func:
-        {
-            printf("glXCreateContextWithConfigSGIX not implemented\n");
-#if 0 //GW
-            GET_EXT_PTR(GLXContext, glXCreateContextWithConfigSGIX,
-                        (Display *, GLXFBConfigSGIX, int, GLXContext, int));
-            int client_fbconfig = args[1];
-
-            ret.i = 0;
-            GLXFBConfig fbconfig = get_fbconfig(process, client_fbconfig);
-
-            if (fbconfig) {
-                GLXContext shareList = get_association_fakecontext_glxcontext(
-                                process, (int) args[3]);
-                process->next_available_context_number++;
-                int fake_ctxt = process->next_available_context_number;
-                GLXContext ctxt = ptr_func_glXCreateContextWithConfigSGIX(
-                                dpy, (GLXFBConfigSGIX) fbconfig, args[2],
-                                shareList, args[4]);
-                set_association_fakecontext_glxcontext(
-                                process, fake_ctxt, ctxt);
-                ret.i = fake_ctxt;
-            }
-#endif
-            break;
-        }
-#endif
     case glXGetVisualFromFBConfig_func:
         {
             int client_fbconfig = args[1];
