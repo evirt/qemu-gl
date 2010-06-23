@@ -60,6 +60,11 @@
 #define GLX_ACCUM_ALPHA_SIZE    17
 // ---------------------------------------------------
 
+extern void glo_surface_getcontents_readpixels(int formatFlags, int stride, int bpp,
+                             int width, int height, void *data);
+
+// ---------------------------------------------------
+
 int glo_flags_get_depth_bits(int formatFlags) {
   switch ( formatFlags & GLO_FF_DEPTH_MASK ) {
     case GLO_FF_DEPTH_16: return 16;
