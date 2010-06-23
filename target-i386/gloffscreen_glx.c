@@ -427,10 +427,4 @@ static void glo_test_readback_methods(void) {
     fprintf(stderr, "VM GL: Using %s readback\n", glo.use_ximage?"XImage":"glReadPixels");
 }
 
-Display *glo_get_dpy(void) {
-  if (!glo_inited)
-        glo_init();
-  return glo.dpy;
-}
-
 #endif
