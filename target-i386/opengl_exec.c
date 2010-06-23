@@ -33,11 +33,15 @@
    only it misses things and is mildly different to stdio \o/. Hence
    don't include stdio and make our own defines. */
 
+#ifdef DEBUG_GL
 #ifdef _WIN32
 #define DEBUGF(...) printf(__VA_ARGS__)
 #else
 extern struct FILE *stderr;		/* Standard error output stream.  */
 #define DEBUGF(...) fprintf(stderr, __VA_ARGS__)
+#endif
+#else
+#define DEBUGF(...) while(0) {printf(__VA_ARGS__); }
 #endif
 
 #define GL_GLEXT_PROTOTYPES
