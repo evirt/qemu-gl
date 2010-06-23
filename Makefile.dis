@@ -6,7 +6,7 @@ include $(SRC_PATH)/rules.mak
 
 .PHONY: all
 
-$(call set-vpath, $(SRC_PATH))
+VPATH=$(SRC_PATH)
 
 QEMU_CFLAGS+=-I..
 
