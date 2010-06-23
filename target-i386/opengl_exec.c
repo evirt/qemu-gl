@@ -28,10 +28,11 @@
 #include <assert.h>
 #include <string.h>
 #include <sys/types.h> // for pid_t
+
 /* GW: dyngen-exec.h defines its own version of stuff that is in stdio.h - 
    only it misses things and is mildly different to stdio \o/. Hence
    don't include stdio and make our own defines. */
-//#include <stdio.h>
+
 #ifdef _WIN32
 #define DEBUGF(...) printf(__VA_ARGS__)
 #else
@@ -50,13 +51,14 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 #include "gloffscreen.h"
 
 
-// FIXME
+/** Misc X11/GLX defines - we don't want to include the whole files for these
+ * as we need them on Windows too */
 typedef int Bool;
-typedef int XID;
+#ifdef ALLOW_PBUFFER
 typedef struct Display Display;
+#endif
 const Bool True = 1;
 const Bool False = 0;
-const int None = 0;
 typedef struct __GLXFBConfigRec GLXFBConfig;
 struct __GLXFBConfigRec {
   int formatFlags;
@@ -66,30 +68,6 @@ struct __GLXFBConfigRec {
 #define GLX_VENDOR              1
 #define GLX_VERSION             2
 #define GLX_EXTENSIONS          3
-
-#define GLX_USE_GL      1
-#define GLX_BUFFER_SIZE     2
-#define GLX_LEVEL       3
-#define GLX_RGBA        4
-#define GLX_DOUBLEBUFFER    5
-#define GLX_STEREO      6
-#define GLX_AUX_BUFFERS     7
-#define GLX_RED_SIZE        8
-#define GLX_GREEN_SIZE      9
-#define GLX_BLUE_SIZE       10
-#define GLX_ALPHA_SIZE      11
-#define GLX_DEPTH_SIZE      12
-#define GLX_STENCIL_SIZE    13
-#define GLX_ACCUM_RED_SIZE  14
-#define GLX_ACCUM_GREEN_SIZE    15
-#define GLX_ACCUM_BLUE_SIZE 16
-#define GLX_ACCUM_ALPHA_SIZE    17
-/*
- * GLX 1.4 and later:
- */
-#define GLX_SAMPLE_BUFFERS              0x186a0 /*100000*/
-#define GLX_SAMPLES                     0x186a1 /*100001*/
-// FIXME
 
 /* We'll say the XVisual Id is actually just an index into here */
 const GLXFBConfig FBCONFIGS[] = {
@@ -1224,14 +1202,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                 *(int *) args[3] = 0;
                 ret.i = 0;
             } else {
-                int *attrib_list = (int *) args[2];
-		while (*attrib_list != None) {
-			if(*attrib_list == GLX_DOUBLEBUFFER) {
-				DEBUGF( "Squashing doublebuffered visual\n");
-				*(attrib_list+1) = False;
-			}
-			attrib_list += 2;
-		}
                 const GLXFBConfig *fbconfigs =
                     glXChooseFBConfigFunc(args[1], (int *) args[2], (int *) args[3]);
                 if (fbconfigs) {
