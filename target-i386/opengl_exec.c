@@ -47,7 +47,7 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 #include "opengl_func.h"
 #include "mesa_mipmap.h"
 #include "opengl_process.h"
-#include "opengl_utils.h"
+#include "range_alloc.h"
 #include "gloffscreen.h"
 
 
