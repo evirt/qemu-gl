@@ -178,7 +178,7 @@ static GLXDrawable create_window(Display *dpy, XVisualInfo *vis)
      * Redirect host created window to offscreen. Instead of being shown directly in QEMU window, the gl window image
      * will be copied back to client X window and shown by X server in client OS.
      */
-	XCompositeRedirectWindow (dpy, win, CompositeRedirectManual);
+    XCompositeRedirectWindow (dpy, win, CompositeRedirectManual);
 
     /* set hints and properties */
     {
@@ -968,7 +968,7 @@ void do_disconnect(ProcessState *process)
         fprintf(stderr, "Destroy context corresponding to fake_context"
                         " = %ld (%08x)\n", (long) process->
                         association_fakecontext_glxcontext[i].key,
-			process->association_fakecontext_glxcontext[i].value);
+        process->association_fakecontext_glxcontext[i].value);
 #endif
         glXDestroyContext(dpy, ctxt);
     }
@@ -1085,37 +1085,89 @@ ProcessStruct *do_context_switch(pid_t pid, int switch_gl_context)
     return (ProcessStruct *)process; // Cast is ok due to struct defn.
 }
 
+static int x_errhandler(Display *d, XErrorEvent *e)
+{
+    fprintf (stderr, "X Error Happened!\n");
+    return 0;
+}
+
+#undef TUNE_PERFORMANCE
 static void GetDrawableImage (ProcessState *process, Display *dpy, GLXDrawable drawable, void * buf)
 {
+    static int x_err_handler_disabled = 0;
     XWindowAttributes wattr;
     XGetWindowAttributes(dpy, drawable, &wattr);
     int width = wattr.width;
     int height = wattr.height;
-
+    // disable the default X error handler. Because the XGetImage would fail in some cases, which will cause
+    // the qemu to abort. The fail of XGetImage actually will not impact the showing of screen.
+    if (!x_err_handler_disabled)
+    {
+        XErrorHandler old_handler = XSetErrorHandler (x_errhandler);
+        x_err_handler_disabled = 1;
+    }
 #ifdef TUNE_PERFORMANCE
-	static struct timeval current_time;
-	static struct timeval last_time;
-	gettimeofday (&current_time, NULL);
-	// compute the interval time.
+    static struct timeval current_time;
+    static struct timeval last_time;
+    gettimeofday (&current_time, NULL);
+    // compute the interval time.
     int diff_time = (current_time.tv_sec - last_time.tv_sec) * 1000 + (current_time.tv_usec - last_time.tv_usec) / 1000;
-	fprintf (stderr, "Waiting %d mseconds to do GetImage again!\n", diff_time);
+    fprintf (stderr, "Waiting %d mseconds to do GetImage again!\n", diff_time);
 #endif
 
     XImage *img = XGetImage(dpy, drawable, 0, 0, width, height, 0xffffffff, ZPixmap);
 
 #ifdef TUNE_PERFORMANCE
-	gettimeofday (&last_time, NULL);
-	// compute the interval time.
+    gettimeofday (&last_time, NULL);
+    // compute the interval time.
     diff_time = (last_time.tv_sec - current_time.tv_sec) * 1000 + (last_time.tv_usec - current_time.tv_usec) / 1000;
-	fprintf (stderr, "---XGet image used %d mseconds!\n", diff_time);
+    fprintf (stderr, "---XGet image used %d mseconds!\n", diff_time);
 
-	fprintf (stderr, "Copy image: width=%d\theight=%d\n", width, height);
+    fprintf (stderr, "Copy image: width=%d\theight=%d\n", width, height);
 #endif
 
     if (img) {
         memcpy (buf, img->data, 4 * width * height);
-		XDestroyImage (img);
+        XDestroyImage (img);
     }
+}
+
+static const char *glx_ext_disabled[] = {
+    "GLX_MESA_swap_control",
+    "GLX_SGI_swap_control",
+    "GLX_EXT_texture_from_pixmap",
+    0
+};
+
+#define MAX_GLX_EXTSTRING_SIZE 1024
+static char glXExtensionString[MAX_GLX_EXTSTRING_SIZE];
+
+static const char * supportedGlXExtensionsString (Display *dpy, int scr)
+{
+    int i = 0;
+    const char * ext_string = glXQueryExtensionsString(dpy, scr);
+
+    if (strlen (ext_string) >= MAX_GLX_EXTSTRING_SIZE)
+    {
+        fprintf (stderr, "The length of glX extension string is exceeding the maximum size of filtering! Filtering will be skipped\n");
+        return ext_string;
+    }
+
+    strcpy (glXExtensionString, ext_string);
+
+    while (glx_ext_disabled[i])
+    {
+        char *position = strstr (glXExtensionString, glx_ext_disabled[i]);
+        if (position)
+        {
+            int removed_str_len = strlen (glx_ext_disabled[i]) + 1;
+            memcpy (position, position + removed_str_len, strlen (position + removed_str_len) + 1);
+            //fprintf (stderr, "The machine has the extension of: %s, which will be disabled.\n", glx_ext_disabled[i]);
+        }
+        ++ i;
+    }
+
+    return glXExtensionString;
 }
 
 int do_function_call(ProcessState *process, int func_number, arg_t *args, char *ret_string)
@@ -1131,8 +1183,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     if (display_function_call) {
         fprintf(stderr, "[%d]> %s\n", process->p.process_id,
                 tab_opengl_calls_name[func_number]);
-	while(*tmp_args) {
-		fprintf(stderr, " + %08x\n", *tmp_args++);
+        while(*tmp_args) {
+            fprintf(stderr, " + %08x\n", *tmp_args++);
         }
     }
 
@@ -1288,8 +1340,8 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 #endif
             break;
         }
-	case _get_imagedata_func:
-		{
+    case _get_imagedata_func:
+        {
             ClientGLXDrawable client_drawable = to_drawable(args[0]);
 
             if (display_function_call)
@@ -1327,7 +1379,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXQueryExtensionsString_func:
         {
-            ret.s = glXQueryExtensionsString(dpy, 0);
+            ret.s = supportedGlXExtensionsString (dpy, 0);
             break;
         }
 
@@ -1535,6 +1587,12 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
     case glGetString_func:
         {
             ret.s = (char *) glGetString(args[0]);
+            if ((args[0] == GL_VERSION) &&
+                (atof(glGetString(args[0])) > 1.4))
+            {
+                // TODO: right now the gl version is restricted to not higher than 1.4
+                ret.s = "1.4";
+            }
             break;
         }
 
