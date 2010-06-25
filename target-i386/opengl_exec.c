@@ -1087,7 +1087,7 @@ ProcessStruct *do_context_switch(pid_t pid, int switch_gl_context)
 
 static int x_errhandler(Display *d, XErrorEvent *e)
 {
-    fprintf (stderr, "X Error Happened!\n");
+    //fprintf (stderr, "X Error Happened!\n");
     return 0;
 }
 
