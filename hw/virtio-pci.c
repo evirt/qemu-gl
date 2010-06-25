@@ -683,6 +683,7 @@ static int virtio_9p_init_pci(PCIDevice *pci_dev)
 }
 #endif
 
+#ifdef CONFIG_GL
 static int virtio_gl_init_pci(PCIDevice *pci_dev)
 {
     VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
@@ -698,6 +699,7 @@ static int virtio_gl_init_pci(PCIDevice *pci_dev)
 
     return 0;
 }
+#endif
 
 static PCIDeviceInfo virtio_info[] = {
     {
@@ -765,6 +767,7 @@ static PCIDeviceInfo virtio_info[] = {
         },
     }, {
 #endif
+#ifdef CONFIG_GL
 	.qdev.name = "virtio-gl-pci",
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_gl_init_pci,
@@ -774,6 +777,7 @@ static PCIDeviceInfo virtio_info[] = {
         },
         .qdev.reset = virtio_pci_reset,
     },{
+#endif
         /* end of list */
     }
 };

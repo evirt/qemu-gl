@@ -2705,9 +2705,9 @@ case "$target_arch2" in
     if test "$xen" = "yes" -a "$target_softmmu" = "yes" ; then
       echo "CONFIG_XEN=y" >> $config_target_mak
     fi
-    if test "$gl" = "yes" ; then
-      cflags="-DTARGET_OPENGL_OK $cflags "
-    fi
+#    if test "$gl" = "yes" ; then
+#      echo "CONFIG_GL=y" >> $config_target_mak
+#    fi
 esac
 case "$target_arch2" in
   i386|x86_64|ppcemb|ppc|ppc64|s390x)
@@ -2873,8 +2873,7 @@ if test "$target_softmmu" = "yes" ; then
   i386)
     cflags="-DHAS_AUDIO -DHAS_AUDIO_CHOICE $cflags"
     if test "$gl" = "yes" ; then
-      echo "CONFIG_GL=y" >> $config_target_mak
-      cflags="-DTARGET_OPENGL_OK $cflags "
+      echo "CONFIG_GL=y" >> $config_host_mak
       if test "$mingw32" = "yes" ; then
         echo "LIBS+=-lopengl32 -lglu32" >> $config_host_mak
       else
