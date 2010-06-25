@@ -550,13 +550,13 @@ static void do_glClientActiveTextureARB(int texture)
 static void destroy_gl_state(GLState *state)
 {
     int i;
-    QGloSurface *qsurface;
+    QGloSurface *qsurface, *tmp;
 
-    QTAILQ_FOREACH(qsurface, &state->qsurfaces, next) {
+    QTAILQ_FOREACH_SAFE(qsurface, &state->qsurfaces, next, tmp) {
         glo_surface_destroy(qsurface->surface);
         QTAILQ_REMOVE(&state->qsurfaces, qsurface, next);
+        free(qsurface);
     }
-    // FIXMEIM Free qsurface?
         
     if (state->context)
       glo_context_destroy(state->context);
