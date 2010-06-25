@@ -107,8 +107,6 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
                 }
 
                 CASE_IN_LENGTH_DEPENDING_ON_PREVIOUS_ARGS:
-// FIXMEIM - for security, we should really validate this...
-//                    compute_arg_length(stderr, func_number, i, args);
                 {
                     if(*(int*)argptr)
                         args[i] = (arg_t)argptr+4;
@@ -170,8 +168,13 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
             argptr += args_size;
         }
 
+        if((char*)argptr > (char*)args_in + args_len) {
+            DEBUGF("Client bug: malformed command, killing process\n");
+            return 0;
+        }
+
         if (signature->ret_type == TYPE_CONST_CHAR)
-            r_buffer[0] = 0;
+            r_buffer[0] = 0; // In case high bits are set.
 
         ret = do_function_call(process, func_number, args, r_buffer);
 
