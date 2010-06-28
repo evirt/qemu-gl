@@ -89,9 +89,16 @@ const GLXFBConfig FBCONFIGS[] = {
     {GLO_FF_BITS_16|GLO_FF_DEPTH_24|GLO_FF_STENCIL_8},*/
 };
 
-#define FGLX_VERSION_STRING "1.2"
-#define FGLX_VERSION_MAJOR 1
-#define FGLX_VERSION_MINOR 2
+#define FAKE_GL_VENDOR     "Qemu"
+#define FAKE_GL_RENDERER   "VMGL Passthrough"
+#define FAKE_GL_VERSION    "1.4"
+#define FAKE_GL_MAJOR      1
+
+
+#define FAKE_GLX_VENDOR     "Qemu"
+#define FAKE_GLX_VERSION_STRING "1.2"
+#define FAKE_GLX_VERSION_MAJOR 1
+#define FAKE_GLX_VERSION_MINOR 2
 
 void *qemu_malloc(size_t size);
 void *qemu_realloc(void *ptr, size_t size);
@@ -282,6 +289,183 @@ typedef struct {
 } ProcessState;
 
 static ProcessState processes[MAX_HANDLED_PROCESS];
+
+static char *strip_extensions(const char *avail, const char *ext[]) {
+  char *pos, *supported, *srcp;
+
+  supported = (char *)malloc(strlen(avail) + 1);
+
+  pos = supported;
+  while(*ext) {
+    srcp = (char*)avail;
+    while((srcp = strstr(srcp, *ext))) {
+      int len = strlen(*ext);
+      if(*(srcp+len) == ' ' || *(srcp+len) == '\0') {
+        strcpy(pos, *ext);
+        pos += len;
+        if(*(srcp+len) == ' ') {
+          *pos = ' ';
+          pos++;
+        }
+        break;
+      }
+      srcp += len;
+    }
+    ext++;
+  }
+  *pos = '\0';
+
+  return supported;
+}
+
+static const char *glx_ext_supported[] = {
+    "GLX_ARB_multisample",
+    0
+};
+
+static char *supported_glx_extensions() {
+  static char *supported;
+
+  if(!supported)
+    supported = strip_extensions(glo_glXQueryExtensionsString(),
+                                 glx_ext_supported);
+
+  return supported;
+}
+
+static const char *gl_ext_supported[] = {
+// Mandatory OpenGL 1.4 Extensions
+    "GL_ARB_depth_texture",
+    "GL_ARB_multisample",
+    "GL_ARB_multitexture",
+    "GL_ARB_point_parameters",
+    "GL_ARB_shadow",
+    "GL_ARB_texture_border_clamp",
+    "GL_ARB_texture_compression",
+    "GL_ARB_texture_cube_map",
+    "GL_ARB_texture_env_add",
+    "GL_ARB_texture_env_combine",
+    "GL_ARB_texture_env_crossbar",
+    "GL_ARB_texture_env_dot3",
+    "GL_ARB_texture_mirrored_repeat",
+    "GL_ARB_transpose_matrix",
+    "GL_ARB_window_pos",
+    "GL_EXT_bgra",
+    "GL_EXT_blend_color",
+    "GL_EXT_blend_func_separate",
+    "GL_EXT_blend_logic_op",
+    "GL_EXT_blend_minmax",
+    "GL_EXT_blend_subtract",
+    "GL_EXT_copy_texture",
+    "GL_EXT_draw_range_elements",
+    "GL_EXT_fog_coord",
+    "GL_EXT_multi_draw_arrays",
+    "GL_EXT_packed_pixels",
+    "GL_EXT_point_parameters",
+    "GL_EXT_polygon_offset",
+    "GL_EXT_rescale_normal",
+    "GL_EXT_secondary_color",
+    "GL_EXT_separate_specular_color",
+    "GL_EXT_stencil_wrap",
+    "GL_EXT_subtexture",
+    "GL_EXT_texture",
+    "GL_EXT_texture3D",
+    "GL_EXT_texture_edge_clamp",
+    "GL_EXT_texture_env_add",
+    "GL_EXT_texture_env_combine",
+    "GL_EXT_texture_lod",
+    "GL_EXT_texture_lod_bias",
+    "GL_EXT_texture_object",
+    "GL_APPLE_packed_pixels",
+    "GL_NV_blend_square",
+    "GL_SGIS_generate_mipmap",
+    "GL_SGIS_texture_border_clamp",
+    "GL_SGIS_texture_edge_clamp",
+    "GL_SGIS_texture_lod",
+// Optional extensions If you get problems try disabling the below.
+    "GL_EXT_compiled_vertex_array",
+    "GL_ARB_copy_buffer",
+    "GL_ARB_depth_clamp",
+    "GL_ARB_draw_buffers ",
+    "GL_ARB_draw_elements_base_vertex",
+    "GL_ARB_fragment_program",
+    "GL_ARB_fragment_program_shadow",
+    "GL_ARB_fragment_shader",
+    "GL_ARB_framebuffer_object",
+    "GL_ARB_half_float_pixel",
+    "GL_ARB_map_buffer_range",                                           
+    "GL_ARB_occlusion_query",
+    "GL_ARB_pixel_buffer_object",
+    "GL_ARB_point_sprite",
+    "GL_ARB_provoking_vertex",
+    "GL_ARB_seamless_cube_map",
+    "GL_ARB_shader_objects",
+    "GL_ARB_shading_language_100",
+    "GL_ARB_shading_language_120",
+    "GL_ARB_sync",                                                           
+    "GL_ARB_texture_non_power_of_two",
+    "GL_ARB_texture_rectangle",
+    "GL_ARB_vertex_array_bgra",                           
+    "GL_ARB_vertex_array_object",
+    "GL_ARB_vertex_buffer_object",
+    "GL_ARB_vertex_program",
+    "GL_ARB_vertex_shader,"
+    "GL_EXT_abgr",
+    "GL_EXT_blend_equation_separate",
+    "GL_EXT_cull_vertex",
+    "GL_EXT_framebuffer_blit",
+    "GL_EXT_framebuffer_object",
+    "GL_EXT_gpu_program_parameters",                            
+    "GL_EXT_packed_depth_stencil",                        
+    "GL_EXT_pixel_buffer_object",
+    "GL_EXT_provoking_vertex",
+    "GL_EXT_shadow_funcs",
+    "GL_EXT_stencil_two_side",
+    "GL_EXT_texture_cube_map",   
+    "GL_EXT_texture_env_dot3",                              
+    "GL_EXT_texture_filter_anisotropic",
+    "GL_EXT_texture_rectangle",
+    "GL_EXT_texture_sRGB",
+    "GL_EXT_texture_swizzle",
+    "GL_EXT_vertex_array",
+    "GL_EXT_vertex_array_bgra",
+    "GL_3DFX_texture_compression_FXT1",
+    "GL_APPLE_client_storage",
+    "GL_APPLE_vertex_array_object",                          
+    "GL_ATI_blend_equation_separate",
+    "GL_ATI_envmap_bumpmap",
+    "GL_ATI_texture_env_combine3",
+    "GL_ATI_separate_stencil",
+    "GL_IBM_multimode_draw_arrays",
+    "GL_IBM_rasterpos_clip",
+    "GL_IBM_texture_mirrored_repeat",
+    "GL_INGR_blend_func_separate", 
+    "GL_MESA_pack_invert",
+    "GL_MESA_texture_signed_rgba",
+    "GL_MESA_ycbcr_texture",
+    "GL_MESA_window_pos",
+    "GL_NV_depth_clamp",
+    "GL_NV_light_max_exponent",
+    "GL_NV_packed_depth_stencil",
+    "GL_NV_texture_env_combine4",
+    "GL_NV_texture_rectangle",
+    "GL_NV_texgen_reflection",
+    "GL_NV_vertex_program",
+    "GL_NV_vertex_program1_1",
+    "GL_OES_read_format",
+    "GL_SUN_multi_draw_arrays",
+    0
+};
+
+static char *compute_gl_extensions() {
+  static char *supported;
+
+  if(!supported)
+    supported = strip_extensions((const char *)glGetString(GL_EXTENSIONS),
+                                 gl_ext_supported);
+
+  return supported;
+}
 
 static inline QGloSurface *get_qsurface_from_client_drawable(GLState *state, ClientGLXDrawable client_drawable) {
     QGloSurface *qsurface;
@@ -847,32 +1031,29 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXQueryExtensionsString_func:
         {
-            // No extensions for you...
-            ret.s = "";//glXQueryExtensionsString(dpy, 0);
+            ret.s = supported_glx_extensions();//glXQueryExtensionsString(dpy, 0);
             break;
         }
 
     case glXQueryServerString_func:
         {
             switch (args[2]) {
-            case GLX_VENDOR : ret.s = "QEmu"; break;
-            case GLX_VERSION : ret.s = FGLX_VERSION_STRING; break;
-            case GLX_EXTENSIONS : ret.s = ""; break;
+            case GLX_VENDOR : ret.s = FAKE_GLX_VENDOR; break;
+            case GLX_VERSION : ret.s = FAKE_GLX_VERSION_STRING; break;
+            case GLX_EXTENSIONS : ret.s = supported_glx_extensions(); break;
             default: ret.s = 0;
             }
-            //ret.s = glXQueryServerString(dpy, 0, args[2]);
             break;
         }
 
     case glXGetClientString_func:
         {
-            switch (args[2]) {
-            case GLX_VENDOR : ret.s = "QEmu"; break;
-            case GLX_VERSION : ret.s = FGLX_VERSION_STRING; break;
-            case GLX_EXTENSIONS : ret.s = ""; break;
+            switch (args[1]) {
+            case GLX_VENDOR : ret.s = FAKE_GLX_VENDOR; break;
+            case GLX_VERSION : ret.s = FAKE_GLX_VERSION_STRING; break;
+            case GLX_EXTENSIONS : ret.s = "GLX_ARB_get_proc_address"; break;
             default: ret.s = 0;
             }
-            //ret.s = glXGetClientString(dpy, args[1]);
             break;
         }
 
@@ -1014,15 +1195,37 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int *major = (int *) args[1];
             int *minor = (int *) args[2];
             //ret.i = glXQueryVersion(dpy, (int *) args[1], (int *) args[2]);
-            if (major) *major=FGLX_VERSION_MAJOR;
-            if (minor) *minor=FGLX_VERSION_MINOR;
+            if (major) *major=FAKE_GLX_VERSION_MAJOR;
+            if (minor) *minor=FAKE_GLX_VERSION_MINOR;
             ret.i = True;
             break;
         }
 
     case glGetString_func:
         {
-            ret.s = (char *) glGetString(args[0]);
+            switch (args[0]) {
+              case GL_VENDOR:
+                ret.s = FAKE_GL_VENDOR;
+              break;
+              case GL_RENDERER:
+                ret.s = FAKE_GL_RENDERER;
+              break;
+              case GL_VERSION:
+                ret.s = FAKE_GL_VERSION;
+              break;
+              case GL_EXTENSIONS:
+                ret.s = compute_gl_extensions();
+              break;
+              case GL_SHADING_LANGUAGE_VERSION:
+		if(FAKE_GL_MAJOR < 2) {
+                  ret.s = "";
+                  break;
+                }
+              // Fall through.
+              default:
+                ret.s = (char *) glGetString(args[0]);
+              break;
+            }
             break;
         }
 
