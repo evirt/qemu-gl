@@ -81,8 +81,13 @@ PFNWGLRELEASEPBUFFERDCARBPROC wglReleasePbufferDCARB;
 PFNWGLCREATEPBUFFERARBPROC wglCreatePbufferARB;
 PFNWGLDESTROYPBUFFERARBPROC wglDestroyPbufferARB;
 
-extern void glo_surface_getcontents_readpixels(int formatFlags, int stride, int bpp,
-                             int width, int height, void *data);
+/* ------------------------------------------------------------------------ */
+
+extern const char *glo_glXQueryExtensionsString(void);
+
+extern void glo_surface_getcontents_readpixels(int formatFlags, int stride,
+                                    int bpp, int width, int height, void *data);
+
 /* ------------------------------------------------------------------------ */
 
 int glo_initialised(void) {
@@ -188,6 +193,11 @@ void glo_kill(void) {
     }
     UnregisterClass(GLO_WINDOW_CLASS, glo.hInstance);
 }
+
+const char *glo_glXQueryExtensionsString(void) {
+  return "";
+}
+
 
 static const char *STANDARD_GL_FUNCTIONS ={
 /* Miscellaneous */
@@ -773,4 +783,10 @@ void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
     if (height)
       *height = surface->height;
 }
+
+/* Fake glXQueryExtensionsString() */
+const char *glo_glXQueryExtensionsString(void) {
+  return "";
+}
+
 #endif

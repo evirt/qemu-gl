@@ -67,6 +67,7 @@ struct _GloSurface {
 extern void glo_surface_getcontents_readpixels(int formatFlags, int stride,
                                     int bpp, int width, int height, void *data);
 static void glo_test_readback_methods(void);
+
 /* ------------------------------------------------------------------------ */
 
 int glo_initialised(void) {
@@ -102,6 +103,7 @@ void *glo_getprocaddress(const char *procName) {
       glo_init();
     return glXGetProcAddressARB((const GLubyte *) procName);
 }
+
 /* ------------------------------------------------------------------------ */
 
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
@@ -346,6 +348,12 @@ void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
     if (height)
       *height = surface->height;
 }
+
+/* Abstract glXQueryExtensionString() */
+const char *glo_glXQueryExtensionsString(void) {
+  return glXQueryExtensionsString(glo.dpy, 0);
+}
+
 
 #define TX (17)
 #define TY (16)
