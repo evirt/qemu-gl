@@ -53,7 +53,11 @@ int qemu_start_incoming_migration(const char *uri)
 #endif
     else {
         fprintf(stderr, "unknown migration protocol: %s\n", uri);
+#if !defined(WIN32)
         ret = -EPROTONOSUPPORT;
+#else
+        ret = -1;
+#endif
     }
     return ret;
 }
