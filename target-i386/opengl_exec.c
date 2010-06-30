@@ -3081,6 +3081,9 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         }
 
     case glClear_func:
+        glClear(args[0]);
+        break;
+#if 0
         /* HACK workaround for an unexplainable issue */
         if (args[0] & GL_COLOR_BUFFER_BIT)
             glClear(GL_COLOR_BUFFER_BIT);
@@ -3091,6 +3094,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
         if (args[0] & GL_ACCUM_BUFFER_BIT)
             glClear(GL_ACCUM_BUFFER_BIT);
         break;
+#endif
 
     default:
         execute_func(func_number, args, &ret);
