@@ -1,3 +1,13 @@
+/*
+ *  Copyright (c) 2006,2007 Even Rouault
+ *  Copyright (c) 2010 Intel
+ *  Written by:
+ *    Gordon Williams <gordon.williams@collabora.co.uk>
+ *    Ian Molton <ian.molton@collabora.co.uk>
+ *
+ */
+
+
 #include <sys/types.h>
 
 extern void init_process_tab(void);

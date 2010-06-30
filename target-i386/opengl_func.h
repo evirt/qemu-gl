@@ -1,5 +1,9 @@
 /*
  *  Copyright (c) 2006,2007 Even Rouault
+ *  Copyright (c) 2010 Intel
+ *  Parts written by: 
+ *    Gordon Williams <gordon.williams@collabora.co.uk>
+ *    Ian Molton <ian.molton@collabora.co.uk>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
