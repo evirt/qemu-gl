@@ -2,7 +2,8 @@
  *  Host-side implementation of GL/GLX API
  *
  *  Copyright (c) 2006,2007 Even Rouault
- *  Copyright (c) 2009,2010 Ian Molton <ian.molton@collabora.co.uk>
+ *  Modified by: 
+ *    Ian Molton <ian.molton@collabora.co.uk>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
