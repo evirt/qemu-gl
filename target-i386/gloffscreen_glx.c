@@ -76,21 +76,12 @@ int glo_initialised(void) {
   return glo_inited;
 }
 
-static int x_errhandler(Display *d, XErrorEvent *e)
-{
-    //fprintf (stderr, "X Error Happened!\n");
-    return 0;
-}
-
 /* Initialise gloffscreen */
 void glo_init(void) {
     if (glo_inited) {
         printf( "gloffscreen already inited\n" );
         exit( EXIT_FAILURE );
     }
-
-	/* Disable the X error handling, which will abort QEMU*/
-    XSetErrorHandler (x_errhandler);
 
     /* Open a connection to the X server */
     glo.dpy = XOpenDisplay( NULL );
