@@ -23,7 +23,11 @@ QEMU_PROG=qemu-$(TARGET_ARCH2)
 else
 # system emulator name
 ifeq ($(TARGET_ARCH), i386)
+ifdef CONFIG_GL
+QEMU_PROG=qemugl$(EXESUF)
+else
 QEMU_PROG=qemu$(EXESUF)
+endif
 else
 QEMU_PROG=qemu-system-$(TARGET_ARCH2)$(EXESUF)
 endif
