@@ -2,8 +2,8 @@
  *  Host-side implementation of GL/GLX API
  *
  *  Copyright (c) 2006,2007 Even Rouault
- *  Copyright (c) 2010 Intel
- *  Written by: 
+ * 
+ *  modified by: 
  *    Gordon Williams <gordon.williams@collabora.co.uk>
  *    Ian Molton <ian.molton@collabora.co.uk>
  *
@@ -325,6 +325,8 @@ static const char *glx_ext_supported[] = {
     0
 };
 
+static const char *glx_client_string = "GLX_ARB_get_proc_address ";
+
 static char *supported_glx_extensions() {
   static char *supported;
 
@@ -407,7 +409,7 @@ static const char *gl_ext_supported[] = {
     "GL_ARB_sync",                                                           
     "GL_ARB_texture_non_power_of_two",
     "GL_ARB_texture_rectangle",
-    "GL_ARB_vertex_array_bgra",                           
+    "GL_ARB_vertex_array_bgra",
     "GL_ARB_vertex_array_object",
     "GL_ARB_vertex_buffer_object",
     "GL_ARB_vertex_program",
@@ -1053,7 +1055,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             switch (args[1]) {
             case GLX_VENDOR : ret.s = FAKE_GLX_VENDOR; break;
             case GLX_VERSION : ret.s = FAKE_GLX_VERSION_STRING; break;
-            case GLX_EXTENSIONS : ret.s = "GLX_ARB_get_proc_address"; break;
+            case GLX_EXTENSIONS : ret.s = glx_client_string; break;
             default: ret.s = 0;
             }
             break;
