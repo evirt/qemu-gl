@@ -2555,6 +2555,7 @@ if test "$target_softmmu" = "yes" ; then
   ;;
   i386)
     if test "$gl" = "yes" ; then
+      echo "CONFIG_GL=y" >> $config_host_mak
       cflags="-DHAS_AUDIO -DHAS_AUDIO_CHOICE -DTARGET_OPENGL_OK $cflags "
     fi
   ;;
