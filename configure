@@ -1841,9 +1841,14 @@ else
       prefix="/usr/local"
   fi
   mansuffix="/share/man"
-  datasuffix="/share/qemu"
-  docsuffix="/share/doc/qemu"
   binsuffix="/bin"
+  if test "$gl" = "yes" ; then
+    datasuffix="/share/qemugl"
+    docsuffix="/share/doc/qemugl"
+  else
+    datasuffix="/share/qemu"
+    docsuffix="/share/doc/qemu"
+  fi
 fi
 
 echo "Install prefix    $prefix"
