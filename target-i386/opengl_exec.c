@@ -1063,7 +1063,6 @@ ProcessStruct *do_context_switch(pid_t pid, int switch_gl_context)
             process = &processes[i];
             break;
         } else if (processes[i].p.process_id == 0) {
-            fprintf(stderr, "new GL process: %d  dpy: %08x\n", pid, parent_dpy);
             process = &processes[i];
             memset(process, 0, sizeof(ProcessState));
             process->p.process_id = pid;
@@ -1095,7 +1094,7 @@ static int x_errhandler(Display *d, XErrorEvent *e)
     return 0;
 }
 
-#undef TUNE_PERFORMANCE
+#undef COPYBACK_DATA_COLLECTION
 static void GetDrawableImage (ProcessState *process, Display *dpy, GLXDrawable drawable, void * buf)
 {
     static int x_err_handler_disabled = 0;
@@ -1103,14 +1102,14 @@ static void GetDrawableImage (ProcessState *process, Display *dpy, GLXDrawable d
     XGetWindowAttributes(dpy, drawable, &wattr);
     int width = wattr.width;
     int height = wattr.height;
-    // disable the default X error handler. Because the XGetImage would fail in some cases, which will cause
-    // the qemu to abort. The fail of XGetImage actually will not impact the showing of screen.
+    // disable the default X error handler. Because the XGetImage would fail in some cases (for example,
+	// when the qemu window is minimized), which will cause the qemu to abort. 
     if (!x_err_handler_disabled)
     {
         XErrorHandler old_handler = XSetErrorHandler (x_errhandler);
         x_err_handler_disabled = 1;
     }
-#ifdef TUNE_PERFORMANCE
+#ifdef COPYBACK_DATA_COLLECTION
     static struct timeval current_time;
     static struct timeval last_time;
     gettimeofday (&current_time, NULL);
@@ -1121,7 +1120,7 @@ static void GetDrawableImage (ProcessState *process, Display *dpy, GLXDrawable d
 
     XImage *img = XGetImage(dpy, drawable, 0, 0, width, height, 0xffffffff, ZPixmap);
 
-#ifdef TUNE_PERFORMANCE
+#ifdef COPYBACK_DATA_COLLECTION
     gettimeofday (&last_time, NULL);
     // compute the interval time.
     diff_time = (last_time.tv_sec - current_time.tv_sec) * 1000 + (last_time.tv_usec - current_time.tv_usec) / 1000;
@@ -1420,7 +1419,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int visualid = (int) args[1];
             int fake_shareList = (int) args[2];
 
-            if (1 || display_function_call)
+            if (display_function_call)
                 fprintf(stderr, "visualid=%d, fake_shareList=%d\n", visualid,
                         fake_shareList);
 
@@ -1535,9 +1534,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                             process->glstates[i]->fake_shareList;
                         process->glstates[i]->ref--;
                         if (process->glstates[i]->ref == 0) {
-                            fprintf(stderr,
-                                    "destroy_gl_state fake_ctxt = %d\n",
-                                    process->glstates[i]->fake_ctxt);
                             destroy_gl_state(process->glstates[i]);
                             free(process->glstates[i]);
                             memmove(&process->glstates[i],
@@ -1553,10 +1549,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
                                     fake_shareList) {
                                     process->glstates[i]->ref--;
                                     if (process->glstates[i]->ref == 0) {
-                                        fprintf(stderr,
-                                                "destroy_gl_state fake_ctxt = %d\n",
-                                                process->glstates[i]->
-                                                fake_ctxt);
                                         destroy_gl_state(process->
                                                          glstates[i]);
                                         free(process->glstates[i]);
