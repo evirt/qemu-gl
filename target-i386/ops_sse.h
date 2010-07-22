@@ -2,7 +2,8 @@
  *  MMX/3DNow!/SSE/SSE2/SSE3/SSSE3/SSE4/PNI support
  *
  *  Copyright (c) 2005 Fabrice Bellard
- *  Copyright (c) 2008 Intel Corporation  <andrew.zaborowski@intel.com>
+ *
+ *  Modified by <andrew.zaborowski@intel.com> 2008
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

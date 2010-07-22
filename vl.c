@@ -246,6 +246,7 @@ unsigned int nb_prom_envs = 0;
 const char *prom_envs[MAX_PROM_ENVS];
 #endif
 int boot_menu;
+int enable_gl;
 
 int nb_numa_nodes;
 uint64_t node_mem[MAX_NODES];
@@ -4564,7 +4565,7 @@ static char *find_datadir(const char *argv0)
 /* Find a likely location for support files using the location of the binary.
    For installed binaries this will be "$bindir/../share/qemu".  When
    running from the build tree this will be "$bindir/../pc-bios".  */
-#define SHARE_SUFFIX "/share/qemu"
+#define SHARE_SUFFIX CONFIG_DATA_SUFFIX
 #define BUILD_SUFFIX "/pc-bios"
 static char *find_datadir(const char *argv0)
 {
@@ -5452,6 +5453,13 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_enable_kvm:
                 kvm_allowed = 1;
                 break;
+#endif
+#ifdef TARGET_OPENGL_OK
+            case QEMU_OPTION_enable_gl:
+                enable_gl = 1;
+                break;
+#else
+#error oops! no GL
 #endif
             case QEMU_OPTION_usb:
                 usb_enabled = 1;

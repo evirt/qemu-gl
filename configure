@@ -518,6 +518,10 @@ for opt do
   ;;
   --enable-kvm) kvm="yes"
   ;;
+  --disable-gl) gl="no"
+  ;;
+  --enable-gl) gl="yes"
+  ;;
   --enable-profiler) profiler="yes"
   ;;
   --enable-cocoa)
@@ -1837,9 +1841,14 @@ else
       prefix="/usr/local"
   fi
   mansuffix="/share/man"
-  datasuffix="/share/qemu"
-  docsuffix="/share/doc/qemu"
   binsuffix="/bin"
+  if test "$gl" = "yes" ; then
+    datasuffix="/share/qemugl"
+    docsuffix="/share/doc/qemugl"
+  else
+    datasuffix="/share/qemu"
+    docsuffix="/share/doc/qemu"
+  fi
 fi
 
 echo "Install prefix    $prefix"
@@ -1898,6 +1907,7 @@ echo "IO thread         $io_thread"
 echo "Linux AIO support $linux_aio"
 echo "Install blobs     $blobs"
 echo "KVM support       $kvm"
+echo "GL passthrough    $gl"
 echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 echo "fdatasync         $fdatasync"
@@ -1916,6 +1926,7 @@ printf " '%s'" "$0" "$@" >> $config_host_mak
 echo >> $config_host_mak
 
 echo "CONFIG_QEMU_SHAREDIR=\"$prefix$datasuffix\"" >> $config_host_mak
+echo "CONFIG_DATA_SUFFIX=\"$datasuffix\"" >> $config_host_mak
 
 case "$cpu" in
   i386|x86_64|alpha|cris|hppa|ia64|m68k|microblaze|mips|mips64|ppc|ppc64|s390|s390x|sparc|sparc64)
@@ -2406,6 +2417,9 @@ case "$target_arch2" in
     if test "$xen" = "yes" -a "$target_softmmu" = "yes" ; then
       echo "CONFIG_XEN=y" >> $config_target_mak
     fi
+    if test "$gl" = "yes" ; then
+      cflags="-DTARGET_OPENGL_OK $cflags "
+    fi
 esac
 case "$target_arch2" in
   i386|x86_64|ppcemb|ppc|ppc64|s390x)
@@ -2545,7 +2559,13 @@ if test "$target_softmmu" = "yes" ; then
   arm)
     cflags="-DHAS_AUDIO $cflags"
   ;;
-  i386|mips|ppc)
+  i386)
+    if test "$gl" = "yes" ; then
+      echo "CONFIG_GL=y" >> $config_host_mak
+      cflags="-DHAS_AUDIO -DHAS_AUDIO_CHOICE -DTARGET_OPENGL_OK $cflags "
+    fi
+  ;;
+  mips|ppc)
     cflags="-DHAS_AUDIO -DHAS_AUDIO_CHOICE $cflags"
   ;;
   esac
