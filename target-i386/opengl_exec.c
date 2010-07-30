@@ -510,10 +510,10 @@ static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
 
     DEBUGF("resize_start\n");
 
+    glo_surface_destroy(old_surface);
+
     surface = glo_surface_create(w, h, glstate->context);
     qsurface->surface = surface;
-
-    glo_surface_destroy(old_surface);
 
     // Client doesnt know surface is new - need to MakeCurrent
     if(process->current_state == qsurface->glstate) {
@@ -737,6 +737,8 @@ static void destroy_gl_state(GLState *state)
 {
     int i;
     QGloSurface *qsurface, *tmp;
+
+return;
 
     QTAILQ_FOREACH_SAFE(qsurface, &state->qsurfaces, next, tmp) {
         glo_surface_destroy(qsurface->surface);
