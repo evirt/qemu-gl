@@ -126,7 +126,7 @@ VirtIODevice *virtio_gl_init(DeviceState *dev)
 
     s->vq = virtio_add_queue(&s->vdev, 128, virtio_gl_handle);
 
-    register_savevm("virtio-gl", -1, 1, virtio_gl_save, virtio_gl_load, s);
+    register_savevm(dev, "virtio-gl", -1, 1, virtio_gl_save, virtio_gl_load, s);
 
     return &s->vdev;
 }
