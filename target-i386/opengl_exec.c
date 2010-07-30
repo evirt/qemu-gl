@@ -295,7 +295,7 @@ static ProcessState processes[MAX_HANDLED_PROCESS];
 static char *strip_extensions(const char *avail, const char *ext[]) {
   char *pos, *supported, *srcp;
 
-  supported = (char *)malloc(strlen(avail) + 1);
+  supported = (char *)malloc(strlen(avail) + 2);
 
   pos = supported;
   while(*ext) {
@@ -315,6 +315,7 @@ static char *strip_extensions(const char *avail, const char *ext[]) {
     }
     ext++;
   }
+  *pos = ' ';
   *pos = '\0';
 
   return supported;
