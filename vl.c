@@ -1800,6 +1800,7 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
     return popt;
 }
 
+extern int _Xdebug;
 int main(int argc, char **argv, char **envp)
 {
     const char *gdbstub_dev = NULL;
@@ -1823,6 +1824,8 @@ int main(int argc, char **argv, char **envp)
     const char *incoming = NULL;
     int show_vnc_port = 0;
     int defconfig = 1;
+
+_Xdebug=1;
 
     atexit(qemu_run_exit_notifiers);
     error_set_progname(argv[0]);

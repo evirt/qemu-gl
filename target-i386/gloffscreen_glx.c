@@ -42,6 +42,7 @@
 struct GloMain {
   Display *dpy;
   int use_ximage;
+  GloSurface *curr_surface;
 };
 struct GloMain glo;
 int glo_inited = 0;
@@ -65,6 +66,11 @@ struct _GloSurface {
   XImage               *image;
   XShmSegmentInfo       shminfo;
 };
+
+#define MAX_CTX 128
+#define MAX_SURF 128
+static GloContext *ctx_arr[MAX_CTX];
+static GloSurface *sur_arr[MAX_SURF];
 
 extern void glo_surface_getcontents_readpixels(int formatFlags, int stride,
                                     int bpp, int width, int height, void *data);
@@ -164,14 +170,41 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
     printf( "glXCreateNewContext failed\n" );
     exit( EXIT_FAILURE );
   }
+  {
+  int i;
+  for(i = 0 ; i < MAX_CTX ; i++)
+    if(ctx_arr[i] == NULL) {
+      ctx_arr[i] = context;
+      break;
+    }
+  }
+fprintf(stderr, "Nct: %p\n", context->context);
 
   return context;
 }
 
-/* Destroy a previouslu created OpenGL context */
+/* Destroy a previously created OpenGL context */
 void glo_context_destroy(GloContext *context) {
+{
+int i;
+  if (!context) fprintf(stderr, "CTX NOT FOUND NULL\n");;
+    for(i = 0 ; i < MAX_CTX ; i++)
+    if(ctx_arr[i] == context) {
+      ctx_arr[i] = NULL;
+      break;
+    }
+    if(i == MAX_CTX)
+      fprintf(stderr, "CTX NOT FOUND %p\n", context);
+    for(i = 0 ; i < MAX_SURF ; i++)
+      if(sur_arr[i])
+        if(sur_arr[i]->context == context)
+          fprintf(stderr, "In USE! %p\n", sur_arr[i]);
+}   
+
+
   if (!context) return;
   // TODO: check for GloSurfaces using this?
+  fprintf(stderr, "Dst: %p\n", context->context);
   glXDestroyContext( glo.dpy, context->context);
   free(context);
 }
@@ -228,6 +261,9 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     /* Create a GLX window to associate the frame buffer configuration
     ** with the created X window */
     surface->glxPixmap = glXCreatePixmap( glo.dpy, context->fbConfig, surface->xPixmap, NULL );
+
+fprintf(stderr, "Sct: %d %d\n", (int)surface->xPixmap, (int)surface->glxPixmap);
+
     if (!surface->glxPixmap) {
       printf( "glXCreatePixmap failed\n" );
       exit( EXIT_FAILURE );
@@ -235,12 +271,40 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
 
     // If we're using XImages to pull the data from the graphics card...
     glo_surface_try_alloc_xshm_image(surface);
+{
+  int i;
+  for(i = 0 ; i < MAX_SURF ; i++)
+    if(sur_arr[i] == NULL) {
+      sur_arr[i] = surface;
+      break;
+    }
+}
+
 
     return surface;
 }
 
 /* Destroy the given surface */
 void glo_surface_destroy(GloSurface *surface) {
+
+    if(glo.curr_surface->context != NULL && surface->context != glo.curr_surface->context) {
+      fprintf(stderr, "AAAAAAAAAAAAAAArgh! %p %p\n", surface->context, glo.curr_surface->context);
+      glo_surface_makecurrent(surface);
+    }
+
+
+{
+int i;
+    for(i = 0 ; i < MAX_SURF ; i++)
+    if(sur_arr[i] == surface) {
+      sur_arr[i] = NULL;
+      break;
+    }
+    if(i == MAX_SURF)
+      fprintf(stderr, "SURF NOT FOUND %p\n", surface);
+}
+
+fprintf(stderr, "Sdst: %d %d\n", (int)surface->xPixmap, (int)surface->glxPixmap);
     glXDestroyPixmap( glo.dpy, surface->glxPixmap);
     XFreePixmap( glo.dpy, surface->xPixmap);
     if(surface->image)
@@ -256,8 +320,27 @@ int glo_surface_makecurrent(GloSurface *surface) {
       glo_init();
 
     if (surface) {
+{
+int i;
+for(i = 0 ; i < MAX_CTX ; i++) {
+  if(ctx_arr[i] == surface->context)
+    break;
+}
+if(i == MAX_CTX)
+  fprintf(stderr, "CTX unknown %p\n", surface->context);
+
+for(i = 0 ; i < MAX_SURF ; i++) {
+  if(surface == sur_arr[i])
+    break;
+}
+if(i == MAX_SURF)
+  fprintf(stderr, "SURFACE unknown %p\n", surface);
+}
+
       ret = glXMakeCurrent(glo.dpy, surface->glxPixmap, surface->context->context);
+      glo.curr_surface = surface;
     } else {
+      glo.curr_surface = NULL;
       ret = glXMakeCurrent(glo.dpy, 0, NULL);
     }
 
