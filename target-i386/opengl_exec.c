@@ -739,8 +739,6 @@ static void destroy_gl_state(GLState *state)
     int i;
     QGloSurface *qsurface, *tmp;
 
-return;
-
     QTAILQ_FOREACH_SAFE(qsurface, &state->qsurfaces, next, tmp) {
         glo_surface_destroy(qsurface->surface);
         QTAILQ_REMOVE(&state->qsurfaces, qsurface, next);
