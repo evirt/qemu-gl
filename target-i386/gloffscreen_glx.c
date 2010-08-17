@@ -286,12 +286,16 @@ fprintf(stderr, "Sct: %d %d\n", (int)surface->xPixmap, (int)surface->glxPixmap);
 
 /* Destroy the given surface */
 void glo_surface_destroy(GloSurface *surface) {
+    GloSurface *old = NULL;
 
-    if(glo.curr_surface->context != NULL && surface->context != glo.curr_surface->context) {
-      fprintf(stderr, "AAAAAAAAAAAAAAArgh! %p %p\n", surface->context, glo.curr_surface->context);
-      glo_surface_makecurrent(surface);
+    if(glo.curr_surface) {
+      if(surface->context != glo.curr_surface->context) {
+        fprintf(stderr, "destroy_surf: %p %p %d\n", surface, surface->context, (int)surface->glxPixmap);
+        old = glo.curr_surface;
+      }
     }
 
+    glo_surface_makecurrent(surface);
 
 {
 int i;
@@ -310,6 +314,8 @@ fprintf(stderr, "Sdst: %d %d\n", (int)surface->xPixmap, (int)surface->glxPixmap)
     if(surface->image)
       glo_surface_free_xshm_image(surface);
     free(surface);
+
+//    glo_surface_makecurrent(old);
 }
 
 /* Make the given surface current */
