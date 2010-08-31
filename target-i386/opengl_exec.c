@@ -1054,7 +1054,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             switch (args[1]) {
             case GLX_VENDOR : ret.s = FAKE_GLX_VENDOR; break;
             case GLX_VERSION : ret.s = FAKE_GLX_VERSION_STRING; break;
-            case GLX_EXTENSIONS : ret.s = "GLX_ARB_get_proc_address"; break;
+            case GLX_EXTENSIONS : ret.s = "GLX_ARB_get_proc_address "; break;
             default: ret.s = 0;
             }
             break;
