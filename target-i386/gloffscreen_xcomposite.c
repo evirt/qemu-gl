@@ -38,10 +38,16 @@
 
 #include <sys/shm.h>
 #include <X11/extensions/XShm.h>
+#include <X11/extensions/Xcomposite.h>
+
+void *qemu_malloc(size_t size);
+void *qemu_realloc(void *ptr, size_t size);
+void qemu_free(void *ptr);
 
 struct GloMain {
   Display *dpy;
   int use_ximage;
+  GloSurface *curr_surface;
 };
 struct GloMain glo;
 int glo_inited = 0;
@@ -58,10 +64,10 @@ struct _GloSurface {
   GLuint                height;
 
   GloContext           *context;
-  Pixmap                xPixmap;
-  GLXPixmap             glxPixmap;
+  Window                window;
 
   // For use by the 'fast' copy code.
+  Pixmap		pixmap;
   XImage               *image;
   XShmSegmentInfo       shminfo;
 };
@@ -118,7 +124,7 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
   GloContext           *context;
   int                   rgbaBits[4];
   int                   bufferAttributes[] = {
-      GLX_DRAWABLE_TYPE, GLX_PIXMAP_BIT,
+      GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
       GLX_RENDER_TYPE,   GLX_RGBA_BIT,
       GLX_RED_SIZE,      8,
       GLX_GREEN_SIZE,    8,
@@ -140,8 +146,6 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
   bufferAttributes[11] = rgbaBits[3];
   bufferAttributes[13] = glo_flags_get_depth_bits(formatFlags);
   bufferAttributes[15] = glo_flags_get_stencil_bits(formatFlags);
-
-  //printf("Got R%d, G%d, B%d, A%d\n", rgbaBits[0], rgbaBits[1], rgbaBits[2], rgbaBits[3]);
 
   fbConfigs = glXChooseFBConfig( glo.dpy, DefaultScreen(glo.dpy),
                                  bufferAttributes, &numReturned );
@@ -168,10 +172,12 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
   return context;
 }
 
-/* Destroy a previouslu created OpenGL context */
+/* Destroy a previously created OpenGL context */
 void glo_context_destroy(GloContext *context) {
   if (!context) return;
+
   // TODO: check for GloSurfaces using this?
+  fprintf(stderr, "Dst: %p\n", context->context);
   glXDestroyContext( glo.dpy, context->context);
   qemu_free(context);
 }
@@ -186,6 +192,7 @@ static void glo_surface_free_xshm_image(GloSurface *surface) {
 
 //FIXMEIM - handle failure to allocate.
 static void glo_surface_try_alloc_xshm_image(GloSurface *surface) {
+
     if(surface->image)
       glo_surface_free_xshm_image(surface);
 
@@ -208,6 +215,9 @@ static void glo_surface_try_alloc_xshm_image(GloSurface *surface) {
  * GLO_ constants */
 GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     GloSurface           *surface;
+    XSetWindowAttributes attr = { 0 };
+    unsigned long mask;
+    XVisualInfo *vis;
 
     if (!context) return 0;
 
@@ -216,22 +226,57 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     surface->width = width;
     surface->height = height;
     surface->context = context;
-    surface->xPixmap = XCreatePixmap( glo.dpy, DefaultRootWindow(glo.dpy),
-                                      width, height,
-                                      glo_flags_get_bytes_per_pixel(context->formatFlags)*8);
 
-    if (!surface->xPixmap) {
-      printf( "XCreatePixmap failed\n" );
+    vis = glXGetVisualFromFBConfig(glo.dpy, ((struct _GloContext*)context)->fbConfig);
+
+    attr.background_pixel = 0xff000000;
+    attr.border_pixel = 0;
+    attr.colormap = XCreateColormap(glo.dpy, DefaultRootWindow(glo.dpy), vis->visual, AllocNone);
+    attr.event_mask = 0; /* StructureNotifyMask | ExposureMask | KeyPressMask */
+    attr.save_under = True;
+    attr.override_redirect = True;
+    attr.cursor = None;
+    mask =
+        CWBackPixel | CWBorderPixel | CWColormap | CWEventMask |
+        CWOverrideRedirect | CWSaveUnder;
+
+    surface->window = XCreateWindow(glo.dpy, DefaultRootWindow(glo.dpy), -width-1000, 0, width, height, 0, vis->depth, InputOutput, vis->visual, mask, &attr);
+
+    if (!surface->window) {
+      printf( "XCreateWindow failed\n" );
       exit( EXIT_FAILURE );
     }
 
-    /* Create a GLX window to associate the frame buffer configuration
-    ** with the created X window */
-    surface->glxPixmap = glXCreatePixmap( glo.dpy, context->fbConfig, surface->xPixmap, NULL );
-    if (!surface->glxPixmap) {
-      printf( "glXCreatePixmap failed\n" );
-      exit( EXIT_FAILURE );
+XMapWindow(glo.dpy, surface->window);
+
+    XCompositeRedirectWindow (glo.dpy, surface->window, CompositeRedirectAutomatic);
+
+    if(glo.use_ximage)
+        surface->pixmap = XCompositeNameWindowPixmap(glo.dpy, surface->window);
+
+    if(surface->pixmap == 0) {
+        fprintf(stderr, "Shit!\n");
+        exit(1);
     }
+
+
+    XSync(glo.dpy, 0);
+
+    /* set hints and properties */
+    {
+        XSizeHints sizehints;
+
+        sizehints.x = 0;
+        sizehints.y = 0;
+        sizehints.width = width;
+        sizehints.height = height;
+        sizehints.flags = USSize | USPosition;
+        XSetWMNormalHints(glo.dpy, surface->window, &sizehints);
+        XSetStandardProperties(glo.dpy, surface->window, "", "", None,
+                        (char **) NULL, 0, &sizehints);
+    }
+
+    XSync(glo.dpy, 0);
 
     // If we're using XImages to pull the data from the graphics card...
     glo_surface_try_alloc_xshm_image(surface);
@@ -241,11 +286,14 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
 
 /* Destroy the given surface */
 void glo_surface_destroy(GloSurface *surface) {
-    glXDestroyPixmap( glo.dpy, surface->glxPixmap);
-    XFreePixmap( glo.dpy, surface->xPixmap);
+
+    if(surface->pixmap)
+        XFreePixmap( glo.dpy, surface->pixmap);
+    XDestroyWindow( glo.dpy, surface->window);
     if(surface->image)
       glo_surface_free_xshm_image(surface);
     qemu_free(surface);
+
 }
 
 /* Make the given surface current */
@@ -256,8 +304,10 @@ int glo_surface_makecurrent(GloSurface *surface) {
       glo_init();
 
     if (surface) {
-      ret = glXMakeCurrent(glo.dpy, surface->glxPixmap, surface->context->context);
+      ret = glXMakeCurrent(glo.dpy, surface->window, surface->context->context);
+      glo.curr_surface = surface;
     } else {
+      glo.curr_surface = NULL;
       ret = glXMakeCurrent(glo.dpy, 0, NULL);
     }
 
@@ -285,11 +335,11 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
       glXWaitGL();
     
       if(surface->image) {
-        XShmGetImage (glo.dpy, surface->xPixmap, surface->image, 0, 0, AllPlanes);
+        XShmGetImage (glo.dpy, surface->pixmap, surface->image, 0, 0, AllPlanes);
         img = surface->image;
       }
       else {
-        img = XGetImage(glo.dpy, surface->xPixmap, 0, 0, surface->width, surface->height, AllPlanes, ZPixmap);
+        img = XGetImage(glo.dpy, surface->pixmap, 0, 0, surface->width, surface->height, AllPlanes, ZPixmap);
       }
 
       if (img) {
@@ -332,16 +382,6 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
                                          stride, bpp, surface->width,
                                          surface->height, data);
 }
-
-//    while(0) {
-//        char fname[30];
-//        int y;
-//        sprintf(fname, "dbg_%08x_%dx%d.rgb", surface, surface->width, surface->height);
-//        FILE *d = fopen(fname, "wb");
-//        for(y = 0 ; y < surface->height ; y++)
-//          fwrite(data + (y*stride), surface->width*3, 1, d);
-//        fclose(d);
-//    }
 
 /* Return the width and height of the given surface */
 void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
