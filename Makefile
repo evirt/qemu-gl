@@ -275,6 +275,8 @@ KEYMAPS=da     en-gb  et  fr     fr-ch  is  lt  modifiers  no  pt-br  sv \
 ar      de     en-us  fi  fr-be  hr     it  lv  nl         pl  ru     th \
 common  de-ch  es     fo  fr-ca  hu     ja  mk  nl-be      pt  sl     tr
 
+SKINFILES=background.png background_p.png font.png plus.png minus.png rotate.png skin.xml
+
 ifdef INSTALL_BLOBS
 BLOBS=bios.bin vgabios.bin vgabios-cirrus.bin ppc_rom.bin \
 video.x openbios-sparc32 openbios-sparc64 openbios-ppc \
@@ -315,6 +317,10 @@ endif
 	for d in $(TARGET_DIRS); do \
 	$(MAKE) -C $$d $@ || exit 1 ; \
         done
+	$(INSTALL_DIR) "$(DESTDIR)$(datadir)/meego/skin/aava"
+	set -e; for x in $(SKINFILES); do \
+		$(INSTALL_DATA) $(SRC_PATH)/meego/skin/aava/$$x "$(DESTDIR)$(datadir)/meego/skin/aava"; \
+	done
 
 # various test targets
 test speed: all

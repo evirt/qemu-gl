@@ -1709,7 +1709,7 @@ static void vga_draw_graphic(VGACommonState *s, int full_update)
         full_update = 1;
     } else if (is_buffer_shared(s->ds->surface) &&
                (full_update || s->ds->surface->data != s->vram_ptr + (s->start_addr * 4))) {
-        s->ds->surface->data = s->vram_ptr + (s->start_addr * 4);
+            //s->ds->surface->data = s->vram_ptr + (s->start_addr * 4);
         dpy_setdata(s->ds);
     }
 

@@ -558,6 +558,15 @@ STEXI
 Start in full screen.
 ETEXI
 
+#if defined(CONFIG_SKINNING)
+DEF("skin", HAS_ARG, QEMU_OPTION_skin,
+    "-skin file      Skin qemu using provided skin configuration file\n")
+STEXI
+@item -skin @var{file}
+Skin qemu using definitions from @var{file}
+ETEXI
+#endif
+
 #if defined(TARGET_PPC) || defined(TARGET_SPARC)
 DEF("g", 1, QEMU_OPTION_g ,
     "-g WxH[xDEPTH]  Set the initial graphical resolution and depth\n")
@@ -1960,6 +1969,15 @@ STEXI
 @item -writeconfig @var{file}
 Write device configuration to @var{file}.
 ETEXI
+
+#if defined(CONFIG_SKINNING)
+DEF("rctport", HAS_ARG, QEMU_OPTION_rctport,
+    "-rctport port   Allow remote control of the skin through specified port\n")
+STEXI
+@item -rctport @var{d}
+Allow remote control of the skin through port @var{d}
+ETEXI
+#endif
 
 HXCOMM This is the last statement. Insert new options before this line!
 STEXI

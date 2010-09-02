@@ -112,6 +112,10 @@ struct DisplayChangeListener {
     void (*dpy_fill)(struct DisplayState *s, int x, int y,
                      int w, int h, uint32_t c);
     void (*dpy_text_cursor)(struct DisplayState *s, int x, int y);
+#ifdef CONFIG_SKINNING
+    void (*dpy_enablezoom)(struct DisplayState *s, int width, int height);
+    void (*dpy_getresolution)(int *width, int *height);
+#endif
 
     struct DisplayChangeListener *next;
 };
@@ -136,6 +140,9 @@ struct DisplayState {
 
     struct DisplayState *next;
 };
+
+void vga_fill_rect (DisplayState *ds, int posx, int posy, 
+    int width, int height, uint32_t color);
 
 void register_displaystate(DisplayState *ds);
 DisplayState *get_displaystate(void);
@@ -250,6 +257,26 @@ static inline void dpy_cursor(struct DisplayState *s, int x, int y) {
     }
 }
 
+#ifdef CONFIG_SKINNING
+static inline void dpy_enablezoom(struct DisplayState *s, int width, int height)
+{
+    struct DisplayChangeListener *dcl = s->listeners;
+    while (dcl != NULL) {
+        if (dcl->dpy_enablezoom) dcl->dpy_enablezoom(s, width, height);
+        dcl = dcl->next;
+    }
+}
+
+static inline void dpy_getresolution(struct DisplayState *s, int *width, int *height)
+{
+    struct DisplayChangeListener *dcl = s->listeners;
+    while (dcl != NULL) {
+        if (dcl->dpy_getresolution) dcl->dpy_getresolution(width, height);
+        dcl = dcl->next;
+    }
+}
+#endif
+
 static inline int ds_get_linesize(DisplayState *ds)
 {
     return ds->surface->linesize;
@@ -272,7 +299,10 @@ static inline int ds_get_height(DisplayState *ds)
 
 static inline int ds_get_bits_per_pixel(DisplayState *ds)
 {
-    return ds->surface->pf.bits_per_pixel;
+    if (ds)
+        return ds->surface->pf.bits_per_pixel;
+    else
+        return 0;
 }
 
 static inline int ds_get_bytes_per_pixel(DisplayState *ds)

@@ -899,7 +899,9 @@ static void vmsvga_update_display(void *opaque)
 {
     struct vmsvga_state_s *s = opaque;
     if (!s->enable) {
-        s->vga.update(&s->vga);
+        /* jun: check function available? */
+        if (s->vga.update)
+            s->vga.update(&s->vga);
         return;
     }
 
@@ -967,7 +969,9 @@ static void vmsvga_invalidate_display(void *opaque)
 {
     struct vmsvga_state_s *s = opaque;
     if (!s->enable) {
-        s->vga.invalidate(&s->vga);
+        /* jun: check function available */
+        if (s->vga.invalidate)
+            s->vga.invalidate(&s->vga);
         return;
     }
 

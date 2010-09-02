@@ -329,6 +329,13 @@ monitor.o: qemu-monitor.h
 
 ARLIBS=../libqemu_common.a libqemu.a $(HWLIB)
 
+ifdef CONFIG_SKINNING
+VPATH+=:$(SRC_PATH)/meego/skin
+CFLAGS+=-I$(SRC_PATH)/meego/skin $(PNG_CFLAGS)
+LIBS+=$(PNG_LIBS) -lexpat
+obj-i386-y += skinning.o skin_config.o skin_image.o skin_button.o
+endif # CONFIG_SKINNING
+
 endif # CONFIG_SOFTMMU
 
 obj-$(CONFIG_GDBSTUB_XML) += gdbstub-xml.o

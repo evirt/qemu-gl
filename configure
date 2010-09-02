@@ -257,6 +257,8 @@ pkgversion=""
 check_utests="no"
 user_pie="no"
 zero_malloc=""
+skinning="no"
+libpng_config="libpng-config"
 
 # OS specific
 if check_define __linux__ ; then
@@ -605,6 +607,10 @@ for opt do
   ;;
   --enable-docs) docs="yes"
   ;;
+  --enable-skinning) skinning="yes"
+  ;;
+  --png-config=*) libpng_config="$optarg"
+  ;;
   *) echo "ERROR: unknown option $opt"; show_help="yes"
   ;;
   esac
@@ -757,6 +763,8 @@ echo "  --enable-linux-aio       enable Linux AIO support"
 echo "  --enable-io-thread       enable IO thread"
 echo "  --disable-blobs          disable installing provided firmware blobs"
 echo "  --kerneldir=PATH         look for kernel includes in PATH"
+echo "  --enable-skinning        Enabled skinning functionality for Qemu"
+echo "  --png-config             Specify PNG lib version config tool (skinning only)"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
@@ -1043,6 +1051,25 @@ EOF
   fi
   libs_softmmu="$sdl_libs $libs_softmmu"
 fi
+
+##########################################
+# LIBPNG detection
+
+libpng=no
+if test "$cocoa" = "no" ; then
+if test "$skinning" = "yes" ; then
+cat > $TMPC << EOF
+#include <png.h>
+int main( void ) { return png_access_version_number(); }
+EOF
+# FIXME: libpng_config seems to fail to add the -lz flag itself
+if $cc $ARCH_CFLAGS $CFLAGS $LDFLAGS -o $TMPE ${OS_CFLAGS} `$libpng_config --cflags 2> /dev/null` $TMPC `$libpng_config --ldflags 2> /dev/null` > /dev/null -lz 2> /dev/null ; then
+    libpng=yes
+else
+    feature_not_found "PNG"
+fi # libpng compile test
+fi # skinning enabled
+fi # cocoa disabled
 
 ##########################################
 # VNC TLS detection
@@ -1912,6 +1939,8 @@ echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 echo "fdatasync         $fdatasync"
 echo "uuid support      $uuid"
+echo "Skinning support  $skinning"
+echo "libpng support    $libpng"
 
 if test $sdl_too_old = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
@@ -2123,6 +2152,14 @@ if test "$gcc_attribute_warn_unused_result" = "yes" ; then
 fi
 if test "$fdatasync" = "yes" ; then
   echo "CONFIG_FDATASYNC=y" >> $config_host_mak
+fi
+if test "$skinning" = "yes" ; then
+  echo "CONFIG_SKINNING=y" >>$config_host_mak
+fi
+if test "$libpng" = "yes" ; then
+  echo "CONFIG_PNG=yes" >> $config_host_mak
+  echo "PNG_LIBS=`$libpng_config --ldflags`" >> $config_host_mak
+  echo "PNG_CFLAGS=`$libpng_config --cflags`" >> $config_host_mak
 fi
 
 # XXX: suppress that

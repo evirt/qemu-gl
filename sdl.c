@@ -60,18 +60,39 @@ static int scaling_active = 0;
 
 extern void opengl_exec_set_parent_window(Display* _dpy, Window _parent_window);
 
+#ifdef CONFIG_SKINNING
+void skin_toggle_full_screen(DisplayState *ds);
+static int host_display_width;
+static int host_display_height;
+extern DisplayState *es_ds;
+extern int es_posx;
+extern int es_posy;
+#endif
+
 static void sdl_update(DisplayState *ds, int x, int y, int w, int h)
 {
     //    printf("updating x=%d y=%d w=%d h=%d\n", x, y, w, h);
-    SDL_Rect rec;
+    SDL_Rect rec, rec_src;
+
+#ifdef CONFIG_SKINNING
+    rec_src.x = x - es_posx;
+    rec_src.y = y - es_posy;
+    rec_src.w = w;
+    rec_src.h = h;
+#else
+    rec_src.x = x;
+    rec_src.y = y;
+    rec_src.w = w;
+    rec_src.h = h;
+#endif
     rec.x = x;
     rec.y = y;
     rec.w = w;
     rec.h = h;
 
-    if (guest_screen) {
+    if (guest_screen && rec_src.x >= 0 && rec_src.y >= 0) {
         if (!scaling_active) {
-            SDL_BlitSurface(guest_screen, &rec, real_screen, &rec);
+            SDL_BlitSurface(guest_screen, &rec_src, real_screen, &rec);
         } else {
             if (sdl_zoom_blit(guest_screen, real_screen, SMOOTHING_ON, &rec) < 0) {
                 fprintf(stderr, "Zoom blit failed\n");
@@ -90,8 +111,12 @@ static void sdl_setdata(DisplayState *ds)
     rec.w = real_screen->w;
     rec.h = real_screen->h;
 
+#ifdef CONFIG_SKINNING    
+    if (es_ds)
+        ds = es_ds;
+#endif
+    
     if (guest_screen != NULL) SDL_FreeSurface(guest_screen);
-
     guest_screen = SDL_CreateRGBSurfaceFrom(ds_get_data(ds), ds_get_width(ds), ds_get_height(ds),
                                             ds_get_bits_per_pixel(ds), ds_get_linesize(ds),
                                             ds->surface->pf.rmask, ds->surface->pf.gmask,
@@ -106,7 +131,12 @@ static void do_sdl_resize(int new_width, int new_height, int bpp)
 
     //    printf("resizing to %d %d\n", w, h);
 
-    flags = SDL_HWSURFACE|SDL_ASYNCBLIT|SDL_HWACCEL|SDL_RESIZABLE;
+    // jun: disable MeeGo screen resizable
+    //flags = SDL_HWSURFACE|SDL_ASYNCBLIT|SDL_HWACCEL|SDL_RESIZABLE;
+    flags = SDL_HWSURFACE|SDL_ASYNCBLIT|SDL_HWACCEL;
+#ifndef CONFIG_SKINNING
+	//flags |= SDL_RESIZABLE;
+#endif
     if (gui_fullscreen)
         flags |= SDL_FULLSCREEN;
     if (gui_noframe)
@@ -147,6 +177,32 @@ static void sdl_resize(DisplayState *ds)
         }
     }
 }
+
+#ifdef CONFIG_SKINNING
+static void sdl_scale_window(DisplayState *ds, int width, int height)
+{
+    // Alter window size by zooming skin images in or out
+    if (real_screen) {
+        int bpp = real_screen->format->BitsPerPixel;
+        if (bpp != 16 && bpp != 32)
+            bpp = 32;
+        do_sdl_resize(width, height, bpp);
+        scaling_active = 1;
+        if (!is_buffer_shared(ds->surface)) {
+            ds->surface = qemu_resize_displaysurface(ds, ds_get_width(ds), ds_get_height(ds));
+            dpy_resize(ds);
+        }
+        vga_hw_invalidate();
+        vga_hw_update();
+    }
+}
+
+static void sdl_getresolution(int *width, int *height)
+{
+    if (width) *width = host_display_width;
+    if (height) *height = host_display_height;
+}
+#endif
 
 static PixelFormat sdl_to_qemu_pixelformat(SDL_PixelFormat *sdl_pf)
 {
@@ -513,15 +569,18 @@ static void sdl_send_mouse_event(int dx, int dy, int dz, int x, int y, int state
 
     if (kbd_mouse_is_absolute()) {
 	if (!absolute_enabled) {
-	    sdl_hide_cursor();
+        // jun: comment by jackie
+	    //sdl_hide_cursor();
 	    if (gui_grab) {
 		sdl_grab_end();
 	    }
 	    absolute_enabled = 1;
 	}
 
-       dx = x * 0x7FFF / (width - 1);
-       dy = y * 0x7FFF / (height - 1);
+    //dx = x * 0x7FFF / (width - 1);
+    //dy = y * 0x7FFF / (height - 1);
+    dx = x;
+    dy = y;
     } else if (absolute_enabled) {
 	sdl_show_cursor();
 	absolute_enabled = 0;
@@ -551,6 +610,9 @@ static void toggle_full_screen(DisplayState *ds)
     }
     vga_hw_invalidate();
     vga_hw_update();
+#ifdef CONFIG_SKINNING
+    skin_toggle_full_screen(ds);
+#endif
 }
 
 static void sdl_refresh(DisplayState *ds)
@@ -885,12 +947,21 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
     vi = SDL_GetVideoInfo();
     host_format = *(vi->vfmt);
 
+#ifdef CONFIG_SKINNING
+    host_display_width = vi->current_w;
+    host_display_height = vi->current_h;
+#endif
+    
     dcl = qemu_mallocz(sizeof(DisplayChangeListener));
     dcl->dpy_update = sdl_update;
     dcl->dpy_resize = sdl_resize;
     dcl->dpy_refresh = sdl_refresh;
     dcl->dpy_setdata = sdl_setdata;
     dcl->dpy_fill = sdl_fill;
+#ifdef CONFIG_SKINNING
+    dcl->dpy_enablezoom = sdl_scale_window;
+    dcl->dpy_getresolution = sdl_getresolution;
+#endif
     ds->mouse_set = sdl_mouse_warp;
     ds->cursor_define = sdl_mouse_define;
     register_displaychangelistener(ds, dcl);
