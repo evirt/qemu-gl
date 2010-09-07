@@ -39,6 +39,12 @@
 #include <sys/shm.h>
 #include <X11/extensions/XShm.h>
 
+#define USE_REDIRECTED_WINDOW
+
+#ifdef USE_REDIRECTED_WINDOW
+#include <X11/extensions/Xcomposite.h>
+#endif /*USE_REDIRECTED_WINDOW*/
+
 struct GloMain {
   Display *dpy;
   int use_ximage;
@@ -48,7 +54,9 @@ int glo_inited = 0;
 
 struct _GloContext {
   GLuint                formatFlags;
-
+#ifdef USE_REDIRECTED_WINDOW
+  XVisualInfo           *visual;
+#endif /*USE_REDIRECTED_WINDOW*/
   GLXFBConfig           fbConfig;
   GLXContext            context;
 };
@@ -58,8 +66,12 @@ struct _GloSurface {
   GLuint                height;
 
   GloContext           *context;
+#ifdef USE_REDIRECTED_WINDOW
+  Window		xWindow;
+#else
   Pixmap                xPixmap;
   GLXPixmap             glxPixmap;
+#endif /*USE_REDIRECTED_WINDOW*/
 
   // For use by the 'fast' copy code.
   XImage               *image;
@@ -109,6 +121,39 @@ void *glo_getprocaddress(const char *procName) {
 
 /* ------------------------------------------------------------------------ */
 
+#ifdef USE_REDIRECTED_WINDOW
+#define MAX_ATTRIB_NUM 20
+static int get_attrib_list (int formatFlags, int *attrib_list) {
+    int rgba[4];
+    glo_flags_get_rgba_bits(formatFlags, rgba);
+    int index = 0;
+
+    if (glo_get_glx_from_flags (formatFlags, GLX_USE_GL)) {
+        attrib_list[index ++ ] = GLX_USE_GL;
+    }
+    //if (glo_get_glx_from_flags (formatFlags, GLX_RGBA)) {
+    attrib_list[index ++ ] = GLX_RGBA;
+    //}
+    attrib_list[index ++ ] = GLX_BUFFER_SIZE;
+    attrib_list[index ++ ] = glo_get_glx_from_flags (formatFlags, GLX_BUFFER_SIZE);
+    attrib_list[index ++ ] = GLX_DOUBLEBUFFER;
+    attrib_list[index ++ ] = GLX_RED_SIZE;
+    attrib_list[index ++ ] = rgba[0];
+    attrib_list[index ++ ] = GLX_GREEN_SIZE;
+    attrib_list[index ++ ] = rgba[1];
+    attrib_list[index ++ ] = GLX_BLUE_SIZE;
+    attrib_list[index ++ ] = rgba[2];
+    attrib_list[index ++ ] = GLX_ALPHA_SIZE;
+    attrib_list[index ++ ] = rgba[3];
+    attrib_list[index ++ ] = GLX_DEPTH_SIZE;
+    attrib_list[index ++ ] = glo_flags_get_depth_bits(formatFlags);
+    attrib_list[index ++ ] = GLX_STENCIL_SIZE; 
+    attrib_list[index ++ ] = glo_flags_get_stencil_bits(formatFlags);
+    attrib_list[index ++ ] = 0;
+    return index;
+}
+#endif /*USE_REDIRECTED_WINDOW*/
+
 /* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
 GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
   if (!glo_inited)
@@ -119,7 +164,11 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
   GloContext           *context;
   int                   rgbaBits[4];
   int                   bufferAttributes[] = {
+#ifdef USE_REDIRECTED_WINDOW
+      GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
+#else
       GLX_DRAWABLE_TYPE, GLX_PIXMAP_BIT,
+#endif /*USE_REDIRECTED_WINDOW*/
       GLX_RENDER_TYPE,   GLX_RGBA_BIT,
       GLX_RED_SIZE,      8,
       GLX_GREEN_SIZE,    8,
@@ -127,6 +176,9 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
       GLX_ALPHA_SIZE,    8,
       GLX_DEPTH_SIZE,    0,
       GLX_STENCIL_SIZE,  0,
+#ifdef USE_REDIRECTED_WINDOW
+      GLX_DOUBLEBUFFER, GL_TRUE,
+#endif /*USE_REDIRECTED_WINDOW*/
       None
   };
 
@@ -154,12 +206,31 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
   memset(context, 0, sizeof(GloContext));
   context->formatFlags = formatFlags;
   context->fbConfig = fbConfigs[0];
-
+#ifdef USE_REDIRECTED_WINDOW
+  int attrib_list[MAX_ATTRIB_NUM];
+  int num = get_attrib_list (formatFlags, attrib_list);
+  if (num > MAX_ATTRIB_NUM) {
+    printf ("attribute list exceeds array bounds!\n");
+    exit (-1);
+  }
+  context->visual = glXChooseVisual (glo.dpy, 
+                                     DefaultScreen(glo.dpy), 
+                                     attrib_list);
+  if (context->visual == NULL) {
+    printf ("Failed to choose visual!\n");
+    exit (-1);
+  }
+  context->context = glXCreateContext (glo.dpy, 
+                                       context->visual, 
+                                       shareLists ? shareLists->context: NULL,
+                                       True);
+#else
   /* Create a GLX context for OpenGL rendering */
   context->context = glXCreateNewContext(glo.dpy, context->fbConfig,
                                          GLX_RGBA_TYPE,
                                          shareLists ? shareLists->context: NULL,
                                          True );
+#endif /*USE_REDIRECTED_WINDOW*/
 
   if (!context->context) {
     printf( "glXCreateNewContext failed\n" );
@@ -195,7 +266,7 @@ static void glo_surface_try_alloc_xshm_image(GloSurface *surface) {
                       &surface->shminfo, surface->width, surface->height);
     surface->shminfo.shmid = shmget(IPC_PRIVATE,
                                     surface->image->bytes_per_line *
-                                                           surface->height,
+                                    surface->height,
                                     IPC_CREAT | 0777);
     surface->shminfo.shmaddr = shmat(surface->shminfo.shmid, NULL, 0);
     surface->image->data = surface->shminfo.shmaddr;
@@ -217,6 +288,35 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     surface->width = width;
     surface->height = height;
     surface->context = context;
+#ifdef USE_REDIRECTED_WINDOW
+    XVisualInfo *vis = context->visual;
+    XSetWindowAttributes attr = { 0 };
+    unsigned long mask = 0;
+
+    /* window attributes */
+    attr.background_pixel = 0xff000000;
+    attr.border_pixel = 0;
+    attr.colormap = XCreateColormap(glo.dpy, DefaultRootWindow (glo.dpy), vis->visual, AllocNone);
+    attr.event_mask = 0;
+    attr.save_under = True;
+    attr.override_redirect = True;
+    attr.cursor = None;
+
+    mask =
+        CWBackPixel | CWBorderPixel | CWColormap | CWEventMask |
+        CWOverrideRedirect | CWSaveUnder;
+    // vis.depth is 24
+    surface->xWindow = XCreateWindow (glo.dpy, DefaultRootWindow (glo.dpy), 
+                                        0, 0, width, height, 0, vis->depth, 
+                                        InputOutput, vis->visual, mask, &attr);
+    if (!surface->xWindow) {
+      printf( "XCreateWindow failed\n" );
+      exit( EXIT_FAILURE );
+    }
+
+    XCompositeRedirectWindow (glo.dpy, surface->xWindow, CompositeRedirectManual);
+
+#else
     surface->xPixmap = XCreatePixmap( glo.dpy, DefaultRootWindow(glo.dpy),
                                       width, height,
                                       glo_flags_get_bytes_per_pixel(context->formatFlags)*8);
@@ -233,7 +333,7 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
       printf( "glXCreatePixmap failed\n" );
       exit( EXIT_FAILURE );
     }
-
+#endif /*USE_REDIRECTED_WINDOW*/
     // If we're using XImages to pull the data from the graphics card...
     glo_surface_try_alloc_xshm_image(surface);
 
@@ -242,8 +342,12 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
 
 /* Destroy the given surface */
 void glo_surface_destroy(GloSurface *surface) {
+#ifdef USE_REDIRECTED_WINDOW
+    XDestroyWindow ( glo.dpy, surface->xWindow);
+#else
     glXDestroyPixmap( glo.dpy, surface->glxPixmap);
     XFreePixmap( glo.dpy, surface->xPixmap);
+#endif /*USE_REDIRECTED_WINDOW*/
     if(surface->image)
       glo_surface_free_xshm_image(surface);
     free(surface);
@@ -257,7 +361,11 @@ int glo_surface_makecurrent(GloSurface *surface) {
       glo_init();
 
     if (surface) {
+#ifdef USE_REDIRECTED_WINDOW
+      ret = glXMakeCurrent(glo.dpy, surface->xWindow, surface->context->context);
+#else
       ret = glXMakeCurrent(glo.dpy, surface->glxPixmap, surface->context->context);
+#endif /*USE_REDIRECTED_WINDOW*/
     } else {
       ret = glXMakeCurrent(glo.dpy, 0, NULL);
     }
@@ -284,7 +392,15 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
 
     if(glo.use_ximage) {
       glXWaitGL();
-    
+#ifdef USE_REDIRECTED_WINDOW
+    if (surface->image) {
+        XShmGetImage (glo.dpy, surface->xWindow, surface->image, 0, 0, AllPlanes);
+        img = surface->image;
+    }
+    else {
+        img = XGetImage(glo.dpy, surface->xWindow, 0, 0, surface->width, surface->height, AllPlanes, ZPixmap);
+    }
+#else
       if(surface->image) {
         XShmGetImage (glo.dpy, surface->xPixmap, surface->image, 0, 0, AllPlanes);
         img = surface->image;
@@ -292,7 +408,7 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
       else {
         img = XGetImage(glo.dpy, surface->xPixmap, 0, 0, surface->width, surface->height, AllPlanes, ZPixmap);
       }
-
+#endif /*USE_REDIRECTED_WINDOW*/
       if (img) {
         if(bpp != 32 && bpp != 24 && !once) {
           fprintf(stderr, "Warning: unsupported colourdepth\n");
@@ -431,7 +547,12 @@ static int glo_can_readback(void) {
 }
 
 static void glo_test_readback_methods(void) {
+//TODO: disabled XShm get image temporarily.
+#if 0
+    glo.use_ximage = 0;
+#else
     glo.use_ximage = 1;
+#endif
     if(!glo_can_readback())
       glo.use_ximage = 0;
 
