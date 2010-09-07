@@ -548,7 +548,7 @@ static int glo_can_readback(void) {
 
 static void glo_test_readback_methods(void) {
 //TODO: disabled XShm get image temporarily.
-#if 0
+#if 1
     glo.use_ximage = 0;
 #else
     glo.use_ximage = 1;
