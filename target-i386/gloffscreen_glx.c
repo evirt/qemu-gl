@@ -155,7 +155,7 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
       printf( "No matching configs found.\n" );
       exit( EXIT_FAILURE );
   }
-  context = (GloContext*)malloc(sizeof(GloContext));
+  context = (GloContext*)qemu_malloc(sizeof(GloContext));
   memset(context, 0, sizeof(GloContext));
   context->formatFlags = formatFlags;
   context->fbConfig = fbConfigs[0];
@@ -206,7 +206,7 @@ int i;
   // TODO: check for GloSurfaces using this?
   fprintf(stderr, "Dst: %p\n", context->context);
   glXDestroyContext( glo.dpy, context->context);
-  free(context);
+  qemu_free(context);
 }
 
 static void glo_surface_free_xshm_image(GloSurface *surface) {
@@ -244,7 +244,7 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
 
     if (!context) return 0;
 
-    surface = (GloSurface*)malloc(sizeof(GloSurface));
+    surface = (GloSurface*)qemu_malloc(sizeof(GloSurface));
     memset(surface, 0, sizeof(GloSurface));
     surface->width = width;
     surface->height = height;
@@ -313,9 +313,7 @@ fprintf(stderr, "Sdst: %d %d\n", (int)surface->xPixmap, (int)surface->glxPixmap)
     XFreePixmap( glo.dpy, surface->xPixmap);
     if(surface->image)
       glo_surface_free_xshm_image(surface);
-    free(surface);
-
-//    glo_surface_makecurrent(old);
+    qemu_free(surface);
 }
 
 /* Make the given surface current */
@@ -326,23 +324,6 @@ int glo_surface_makecurrent(GloSurface *surface) {
       glo_init();
 
     if (surface) {
-{
-int i;
-for(i = 0 ; i < MAX_CTX ; i++) {
-  if(ctx_arr[i] == surface->context)
-    break;
-}
-if(i == MAX_CTX)
-  fprintf(stderr, "CTX unknown %p\n", surface->context);
-
-for(i = 0 ; i < MAX_SURF ; i++) {
-  if(surface == sur_arr[i])
-    break;
-}
-if(i == MAX_SURF)
-  fprintf(stderr, "SURFACE unknown %p\n", surface);
-}
-
       ret = glXMakeCurrent(glo.dpy, surface->glxPixmap, surface->context->context);
       glo.curr_surface = surface;
     } else {
@@ -453,9 +434,9 @@ static int glo_can_readback(void) {
     GloContext *context;
     GloSurface *surface;
 
-    unsigned char *datain = (unsigned char *)malloc(4*TX*TY);
-    unsigned char *datain_flip = (unsigned char *)malloc(4*TX*TY); // flipped input data (for GL)
-    unsigned char *dataout = (unsigned char *)malloc(4*TX*TY);
+    unsigned char *datain = (unsigned char *)qemu_malloc(4*TX*TY);
+    unsigned char *datain_flip = (unsigned char *)qemu_malloc(4*TX*TY); // flipped input data (for GL)
+    unsigned char *dataout = (unsigned char *)qemu_malloc(4*TX*TY);
     unsigned char *p;
     int x,y;
 

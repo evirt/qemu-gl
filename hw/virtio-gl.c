@@ -43,8 +43,8 @@ static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
 	if(length < SIZE_OUT_HEADER || r_length < SIZE_IN_HEADER)
 		goto done;
 
-	buffer = malloc(length);
-        r_buffer = malloc(r_length);
+	buffer = qemu_malloc(length);
+        r_buffer = qemu_malloc(r_length);
 	ptr = buffer;
         i_buffer = (int*)buffer;
 
@@ -65,7 +65,7 @@ static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
                         i_buffer[1] - SIZE_OUT_HEADER, /* cmd buffer length */
                         r_buffer + SIZE_IN_HEADER);    /* return buffer */
 
-        free(buffer);
+//        qemu_free(buffer);
 
 	if(r_length)
 		ret = r_length;
@@ -81,7 +81,7 @@ static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
             i++;
         }
 
-        free(r_buffer);
+        qemu_free(r_buffer);
 done:
         virtqueue_push(vq, &elem, ret);
 
