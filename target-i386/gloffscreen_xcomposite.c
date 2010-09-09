@@ -40,6 +40,10 @@
 #include <X11/extensions/XShm.h>
 #include <X11/extensions/Xcomposite.h>
 
+void *qemu_malloc(size_t size);
+void *qemu_realloc(void *ptr, size_t size);
+void qemu_free(void *ptr);
+
 struct GloMain {
   Display *dpy;
   int use_ximage;
@@ -63,14 +67,10 @@ struct _GloSurface {
   Window                window;
 
   // For use by the 'fast' copy code.
+  Pixmap		pixmap;
   XImage               *image;
   XShmSegmentInfo       shminfo;
 };
-
-//#define MAX_CTX 128
-//#define MAX_SURF 128
-//static GloContext *ctx_arr[MAX_CTX];
-//static GloSurface *sur_arr[MAX_SURF];
 
 extern void glo_surface_getcontents_readpixels(int formatFlags, int stride,
                                     int bpp, int width, int height, void *data);
@@ -124,7 +124,7 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
   GloContext           *context;
   int                   rgbaBits[4];
   int                   bufferAttributes[] = {
-      GLX_DRAWABLE_TYPE, GLX_PIXMAP_BIT,
+      GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
       GLX_RENDER_TYPE,   GLX_RGBA_BIT,
       GLX_RED_SIZE,      8,
       GLX_GREEN_SIZE,    8,
@@ -155,7 +155,7 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
       printf( "No matching configs found.\n" );
       exit( EXIT_FAILURE );
   }
-  context = (GloContext*)malloc(sizeof(GloContext));
+  context = (GloContext*)qemu_malloc(sizeof(GloContext));
   memset(context, 0, sizeof(GloContext));
   context->formatFlags = formatFlags;
   context->fbConfig = fbConfigs[0];
@@ -181,7 +181,7 @@ void glo_context_destroy(GloContext *context) {
   // TODO: check for GloSurfaces using this?
   fprintf(stderr, "Dst: %p\n", context->context);
   glXDestroyContext( glo.dpy, context->context);
-  free(context);
+  qemu_free(context);
 }
 
 static void glo_surface_free_xshm_image(GloSurface *surface) {
@@ -194,6 +194,7 @@ static void glo_surface_free_xshm_image(GloSurface *surface) {
 
 //FIXMEIM - handle failure to allocate.
 static void glo_surface_try_alloc_xshm_image(GloSurface *surface) {
+
     if(surface->image)
       glo_surface_free_xshm_image(surface);
 
@@ -222,7 +223,7 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
 
     if (!context) return 0;
 
-    surface = (GloSurface*)malloc(sizeof(GloSurface));
+    surface = (GloSurface*)qemu_malloc(sizeof(GloSurface));
     memset(surface, 0, sizeof(GloSurface));
     surface->width = width;
     surface->height = height;
@@ -241,7 +242,7 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
         CWBackPixel | CWBorderPixel | CWColormap | CWEventMask |
         CWOverrideRedirect | CWSaveUnder;
 
-    surface->window = XCreateWindow(glo.dpy, DefaultRootWindow(glo.dpy), 0, 0, width, height, 0, vis->depth, InputOutput, vis->visual, mask, &attr);
+    surface->window = XCreateWindow(glo.dpy, DefaultRootWindow(glo.dpy), -width-1000, 0, width, height, 0, vis->depth, InputOutput, vis->visual, mask, &attr);
 
 ////    surface->xPixmap = XCreatePixmap( glo.dpy, DefaultRootWindow(glo.dpy),
 ////                           width, height,
@@ -252,7 +253,18 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
       exit( EXIT_FAILURE );
     }
 
-//    XCompositeRedirectWindow (glo.dpy, surface->window, CompositeRedirectManual);
+XMapWindow(glo.dpy, surface->window);
+
+    XCompositeRedirectWindow (glo.dpy, surface->window, CompositeRedirectAutomatic);
+    surface->pixmap = XCompositeNameWindowPixmap(glo.dpy, surface->window);
+
+    if(surface->pixmap == 0) {
+        fprintf(stderr, "Shit!\n");
+        exit(1);
+    }
+
+
+    XSync(glo.dpy, 0);
 
     /* set hints and properties */
     {
@@ -279,10 +291,11 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
 /* Destroy the given surface */
 void glo_surface_destroy(GloSurface *surface) {
 
+//Destroy pixmap
     XDestroyWindow( glo.dpy, surface->window);
     if(surface->image)
       glo_surface_free_xshm_image(surface);
-    free(surface);
+    qemu_free(surface);
 
 }
 
@@ -325,11 +338,11 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
       glXWaitGL();
     
       if(surface->image) {
-        XShmGetImage (glo.dpy, surface->window, surface->image, 0, 0, AllPlanes);
+        XShmGetImage (glo.dpy, surface->pixmap, surface->image, 0, 0, AllPlanes);
         img = surface->image;
       }
       else {
-        img = XGetImage(glo.dpy, surface->window, 0, 0, surface->width, surface->height, AllPlanes, ZPixmap);
+        img = XGetImage(glo.dpy, surface->pixmap, 0, 0, surface->width, surface->height, AllPlanes, ZPixmap);
       }
 
       if (img) {
@@ -373,16 +386,6 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
                                          surface->height, data);
 }
 
-//    while(0) {
-//        char fname[30];
-//        int y;
-//        sprintf(fname, "dbg_%08x_%dx%d.rgb", surface, surface->width, surface->height);
-//        FILE *d = fopen(fname, "wb");
-//        for(y = 0 ; y < surface->height ; y++)
-//          fwrite(data + (y*stride), surface->width*3, 1, d);
-//        fclose(d);
-//    }
-
 /* Return the width and height of the given surface */
 void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
     if (width)
@@ -404,9 +407,9 @@ static int glo_can_readback(void) {
     GloContext *context;
     GloSurface *surface;
 
-    unsigned char *datain = (unsigned char *)malloc(4*TX*TY);
-    unsigned char *datain_flip = (unsigned char *)malloc(4*TX*TY); // flipped input data (for GL)
-    unsigned char *dataout = (unsigned char *)malloc(4*TX*TY);
+    unsigned char *datain = (unsigned char *)qemu_malloc(4*TX*TY);
+    unsigned char *datain_flip = (unsigned char *)qemu_malloc(4*TX*TY); // flipped input data (for GL)
+    unsigned char *dataout = (unsigned char *)qemu_malloc(4*TX*TY);
     unsigned char *p;
     int x,y;
 
@@ -470,9 +473,8 @@ static int glo_can_readback(void) {
 }
 
 static void glo_test_readback_methods(void) {
-//    glo.use_ximage = 1;
+    glo.use_ximage = 1;
     if(!glo_can_readback())
-      glo.use_ximage = 0;
       glo.use_ximage = 0;
 
     fprintf(stderr, "VM GL: Using %s readback\n", glo.use_ximage?"XImage":"glReadPixels");
