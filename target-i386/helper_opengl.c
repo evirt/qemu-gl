@@ -73,6 +73,11 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
         func_number = *(short*)argptr;
         argptr += 2;
 
+        if(func_number >= GL_N_CALLS) {
+            fprintf(stderr, "Bad function number or corrupt command queue\n");
+            return 0;
+        }
+
         signature = (Signature *) tab_opengl_calls[func_number];
 
         tmp = argptr;
@@ -224,6 +229,7 @@ int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer)
         }
         else {
             DEBUGF("Attempt to init twice. Continuing regardless.\n");
+            return 1;
         }
     }
 
