@@ -23,7 +23,7 @@
  * Find a nice value for msize
  * XXX if_maxlinkhdr already in mtu
  */
-#define SLIRP_MSIZE (IF_MTU + IF_MAXLINKHDR + sizeof(struct m_hdr ) + 6)
+#define SLIRP_MSIZE (IF_MTU + IF_MAXLINKHDR + sizeof(struct mbuf) + 600)
 
 void
 m_init(Slirp *slirp)
