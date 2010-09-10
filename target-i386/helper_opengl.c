@@ -234,7 +234,7 @@ int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer)
     }
 
     if(unlikely(first_func == -1 || !process->wordsize)) {
-        if(!process->wordsize && !first_func != -1)
+        if(!process->wordsize && first_func != -1)
             DEBUGF("commands submitted before process init.\n");
         ret = 0;
     }
