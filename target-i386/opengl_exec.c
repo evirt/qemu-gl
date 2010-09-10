@@ -1028,7 +1028,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
     case glXChooseVisual_func:
         {
-            ret.i = glXChooseVisualFunc((int *) args[2]);
+            ret.i = glXChooseVisualFunc((int *) &args[2]);
             break;
         }
 
