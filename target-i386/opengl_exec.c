@@ -295,7 +295,7 @@ static ProcessState processes[MAX_HANDLED_PROCESS];
 static char *strip_extensions(const char *avail, const char *ext[]) {
   char *pos, *supported, *srcp;
 
-  supported = (char *)malloc(strlen(avail) + 2);
+  supported = (char *)qemu_malloc(strlen(avail) + 2);
 
   pos = supported;
   while(*ext) {
@@ -742,7 +742,7 @@ static void destroy_gl_state(GLState *state)
     QTAILQ_FOREACH_SAFE(qsurface, &state->qsurfaces, next, tmp) {
         glo_surface_destroy(qsurface->surface);
         QTAILQ_REMOVE(&state->qsurfaces, qsurface, next);
-        free(qsurface);
+        qemu_free(qsurface);
     }
         
     if (state->context)

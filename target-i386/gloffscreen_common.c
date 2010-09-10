@@ -38,6 +38,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+void *qemu_malloc(size_t size);
+void *qemu_realloc(void *ptr, size_t size);
+void qemu_free(void *ptr);
+
 // ---------------------------------------------------
 //  Copied from glx.h as we need them in windows too
 /*
@@ -310,7 +314,7 @@ void glo_surface_getcontents_readpixels(int formatFlags, int stride, int bpp,
   // Faster buffer flip
   GLubyte *b = (GLubyte *)data;
   GLubyte *c = &((GLubyte *)data)[stride*(height-1)];
-  GLubyte *tmp = (GLubyte*)malloc(stride);
+  GLubyte *tmp = (GLubyte*)qemu_malloc(stride);
   int irow;
 
   glReadPixels(0, 0, width, height, glFormat, glType, data);
@@ -322,7 +326,7 @@ void glo_surface_getcontents_readpixels(int formatFlags, int stride, int bpp,
     b += stride;
     c -= stride;
   }
-  free(tmp);
+  qemu_free(tmp);
 
 #endif
 

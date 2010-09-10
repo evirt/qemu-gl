@@ -26,6 +26,10 @@
 #ifndef _OPENGL_UTILS
 #define _OPENGL_UTILS
 
+void *qemu_malloc(size_t size);
+void *qemu_realloc(void *ptr, size_t size);
+void qemu_free(void *ptr);
+
 typedef struct {
     unsigned int *values;
     int nbValues;
@@ -95,7 +99,7 @@ static inline void alloc_value(RangeAllocator *range, unsigned int value)
             }
         }
     } else {
-        range->values = malloc(sizeof(int));
+        range->values = qemu_malloc(sizeof(int));
         range->values[0] = value;
         range->nbValues = 1;
     }
@@ -109,7 +113,7 @@ static inline unsigned int alloc_range(RangeAllocator *range, int n,
 
     if (range->nbValues == 0) {
         range->nbValues = n;
-        range->values = malloc(n * sizeof(int));
+        range->values = qemu_malloc(n * sizeof(int));
         for (i = 0; i < n; i++) {
             range->values[i] = i + 1;
             if (values)
