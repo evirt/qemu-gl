@@ -2146,6 +2146,8 @@ ETEXI
 STEXI
 @item info jit
 show dynamic compiler info
+@item info kqemu
+show KQEMU information
 @item info kvm
 show KVM information
 @item info numa

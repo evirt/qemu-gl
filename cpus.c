@@ -284,9 +284,18 @@ void qemu_notify_event(void)
     qemu_event_increment ();
     if (env) {
         cpu_exit(env);
-    }
+#ifdef USE_KQEMU
+        if (env->kqemu_enabled)
+            kqemu_cpu_interrupt(env);
+#endif
+     }
     if (next_cpu && env != next_cpu) {
         cpu_exit(next_cpu);
+#ifdef CONFIG_KQEMU
+            if (next_cpu->kqemu_enabled) {
+                kqemu_cpu_interrupt(next_cpu);
+            }
+#endif
     }
 }
 

@@ -1902,6 +1902,51 @@ static void tlb_info(Monitor *mon)
 
 #endif
 
+static void do_info_kqemu_print(Monitor *mon, const QObject *data)
+{
+    QDict *qdict;
+
+    qdict = qobject_to_qdict(data);
+
+    monitor_printf(mon, "kqemu support: ");
+    if (qdict_get_bool(qdict, "present")) {
+        monitor_printf(mon, "%s\n", qdict_get_bool(qdict, "enabled") ?
+                                    "enabled" : "disabled");
+    } else {
+        monitor_printf(mon, "not compiled\n");
+    }
+}
+
+static void do_info_kqemu(Monitor *mon, QObject **ret_data)
+{
+#ifdef CONFIG_KQEMU
+    CPUState *env;
+    int val;
+    val = 0;
+    env = mon_get_cpu();
+    if (!env) {
+        monitor_printf(mon, "No cpu initialized yet");
+        return;
+    }
+    val = env->kqemu_enabled;
+    monitor_printf(mon, "kqemu support: ");
+    switch(val) {
+    default:
+    case 0:
+        monitor_printf(mon, "disabled\n");
+        break;
+    case 1:
+        monitor_printf(mon, "enabled for user code\n");
+        break;
+    case 2:
+        monitor_printf(mon, "enabled for user and kernel code\n");
+        break;
+    }
+#else
+    monitor_printf(mon, "kqemu support: not compiled\n");
+#endif
+}
+
 static void do_info_kvm_print(Monitor *mon, const QObject *data)
 {
     QDict *qdict;
@@ -1950,6 +1995,14 @@ static void do_info_numa(Monitor *mon)
 
 int64_t qemu_time;
 int64_t dev_time;
+
+int64_t kqemu_time;
+int64_t qemu_time;
+int64_t kqemu_exec_count;
+int64_t dev_time;
+int64_t kqemu_ret_int_count;
+int64_t kqemu_ret_excp_count;
+int64_t kqemu_ret_intr_count;
 
 static void do_info_profile(Monitor *mon)
 {
@@ -2405,6 +2458,14 @@ static const mon_cmd_t info_cmds[] = {
         .params     = "",
         .help       = "show dynamic compiler info",
         .mhandler.info = do_info_jit,
+    },
+    {
+        .name       = "kqemu",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show KQEMU information",
+        .user_print = do_info_kqemu_print,
+        .mhandler.info_new = do_info_kqemu,
     },
     {
         .name       = "kvm",

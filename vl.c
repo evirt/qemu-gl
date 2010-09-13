@@ -161,6 +161,11 @@ int main(int argc, char **argv)
 #include "cpus.h"
 #include "arch_init.h"
 
+#ifdef CONFIG_KQEMU
+extern ram_addr_t kqemu_phys_ram_size;
+extern uint8_t *kqemu_phys_ram_base;
+#endif
+
 //#define DEBUG_NET
 //#define DEBUG_SLIRP
 
@@ -2171,7 +2176,11 @@ int main(int argc, char **argv, char **envp)
                 }
 
                 /* On 32-bit hosts, QEMU is limited by virtual address space */
-                if (value > (2047 << 20) && HOST_LONG_BITS == 32) {
+                if (value > (2047 << 20)
+#ifndef CONFIG_KQEMU
+                    && HOST_LONG_BITS == 32
+#endif
+                    ) {
                     fprintf(stderr, "qemu: at most 2047 MB RAM can be simulated\n");
                     exit(1);
                 }
@@ -2436,8 +2445,19 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_smbios:
                 do_smbios_option(optarg);
                 break;
+#ifdef CONFIG_KQEMU
+            case QEMU_OPTION_enable_kqemu:
+                kqemu_allowed = 1;
+                break;
+            case QEMU_OPTION_kernel_kqemu:
+                kqemu_allowed = 2;
+                break;
+#endif
             case QEMU_OPTION_enable_kvm:
                 kvm_allowed = 1;
+#ifdef CONFIG_KQEMU
+                kqemu_allowed = 0;
+#endif
                 break;
             case QEMU_OPTION_enable_gl:
                 enable_gl = 1;
@@ -2638,6 +2658,14 @@ int main(int argc, char **argv, char **envp)
         data_dir = CONFIG_QEMU_DATADIR;
     }
 
+#if defined(CONFIG_KVM) && defined(CONFIG_KQEMU)
+    if (kvm_allowed && kqemu_allowed) {
+        fprintf(stderr,
+                "You can not enable both KVM and kqemu at the same time\n");
+        exit(1);
+    }
+#endif
+
     /*
      * Default to max_cpus = smp_cpus, in case the user doesn't
      * specify a max_cpus value.
@@ -2735,6 +2763,10 @@ int main(int argc, char **argv, char **envp)
         }
     }
 
+#ifdef CONFIG_KQEMU
+    if (smp_cpus > 1)
+        kqemu_allowed = 0;
+#endif
     if (qemu_init_main_loop()) {
         fprintf(stderr, "qemu_init_main_loop failed\n");
         exit(1);
@@ -2770,6 +2802,19 @@ int main(int argc, char **argv, char **envp)
     /* init the memory */
     if (ram_size == 0)
         ram_size = DEFAULT_RAM_SIZE * 1024 * 1024;
+
+#ifdef CONFIG_KQEMU
+    /* FIXME: This is a nasty hack because kqemu can't cope with dynamic
+       guest ram allocation.  It needs to go away.  */
+    if (kqemu_allowed) {
+        kqemu_phys_ram_size = ram_size + 8 * 1024 * 1024 + 4 * 1024 * 1024;
+        kqemu_phys_ram_base = qemu_vmalloc(kqemu_phys_ram_size);
+        if (!kqemu_phys_ram_base) {
+            fprintf(stderr, "Could not allocate physical memory\n");
+            exit(1);
+        }
+    }
+#endif
 
     /* init the dynamic translator */
     cpu_exec_init_all(tb_size * 1024 * 1024);

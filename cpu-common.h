@@ -21,7 +21,12 @@
 #if !defined(CONFIG_USER_ONLY)
 
 /* address in the RAM (different from a physical address) */
+#ifdef CONFIG_KQEMU
+/* FIXME: This is wrong.  */
+typedef uint32_t ram_addr_t;
+#else
 typedef unsigned long ram_addr_t;
+#endif
 
 /* memory API */
 

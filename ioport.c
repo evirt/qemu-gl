@@ -196,18 +196,36 @@ void cpu_outb(pio_addr_t addr, uint8_t val)
 {
     LOG_IOPORT("outb: %04"FMT_pioaddr" %02"PRIx8"\n", addr, val);
     ioport_write(0, addr, val);
+#if 0
+#ifdef CONFIG_KQEMU
+    if (env)
+        env->last_io_time = cpu_get_time_fast();
+#endif
+#endif
 }
 
 void cpu_outw(pio_addr_t addr, uint16_t val)
 {
     LOG_IOPORT("outw: %04"FMT_pioaddr" %04"PRIx16"\n", addr, val);
     ioport_write(1, addr, val);
+#if 0
+#ifdef CONFIG_KQEMU
+    if (env)
+        env->last_io_time = cpu_get_time_fast();
+#endif
+#endif
 }
 
 void cpu_outl(pio_addr_t addr, uint32_t val)
 {
     LOG_IOPORT("outl: %04"FMT_pioaddr" %08"PRIx32"\n", addr, val);
     ioport_write(2, addr, val);
+#if 0
+#ifdef CONFIG_KQEMU
+    if (env)
+        env->last_io_time = cpu_get_time_fast();
+#endif
+#endif
 }
 
 uint8_t cpu_inb(pio_addr_t addr)
@@ -215,6 +233,12 @@ uint8_t cpu_inb(pio_addr_t addr)
     uint8_t val;
     val = ioport_read(0, addr);
     LOG_IOPORT("inb : %04"FMT_pioaddr" %02"PRIx8"\n", addr, val);
+#if 0
+#ifdef CONFIG_KQEMU
+    if (env)
+        env->last_io_time = cpu_get_time_fast();
+#endif
+#endif
     return val;
 }
 
@@ -223,6 +247,12 @@ uint16_t cpu_inw(pio_addr_t addr)
     uint16_t val;
     val = ioport_read(1, addr);
     LOG_IOPORT("inw : %04"FMT_pioaddr" %04"PRIx16"\n", addr, val);
+#if 0
+#ifdef CONFIG_KQEMU
+    if (env)
+        env->last_io_time = cpu_get_time_fast();
+#endif
+#endif
     return val;
 }
 
@@ -231,5 +261,11 @@ uint32_t cpu_inl(pio_addr_t addr)
     uint32_t val;
     val = ioport_read(2, addr);
     LOG_IOPORT("inl : %04"FMT_pioaddr" %08"PRIx32"\n", addr, val);
+#if 0
+#ifdef CONFIG_KQEMU
+    if (env)
+        env->last_io_time = cpu_get_time_fast();
+#endif
+#endif
     return val;
 }

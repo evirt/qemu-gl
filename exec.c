@@ -1943,6 +1943,12 @@ void tlb_flush(CPUState *env, int flush_global)
 
     memset (env->tb_jmp_cache, 0, TB_JMP_CACHE_SIZE * sizeof (void *));
 
+#ifdef CONFIG_KQEMU
+    if (env->kqemu_enabled) {
+        kqemu_flush(env, flush_global);
+    }
+#endif
+
     env->tlb_flush_addr = -1;
     env->tlb_flush_mask = 0;
     tlb_flush_count++;
@@ -1988,6 +1994,12 @@ void tlb_flush_page(CPUState *env, target_ulong addr)
         tlb_flush_entry(&env->tlb_table[mmu_idx][i], addr);
 
     tlb_flush_jmp_cache(env, addr);
+
+#ifdef CONFIG_KQEMU
+    if (env->kqemu_enabled) {
+        kqemu_flush_page(env, addr);
+    }
+#endif
 }
 
 /* update the TLBs so that writes to code in the virtual page 'addr'
@@ -2033,6 +2045,19 @@ void cpu_physical_memory_reset_dirty(ram_addr_t start, ram_addr_t end,
     length = end - start;
     if (length == 0)
         return;
+#ifdef CONFIG_KQEMU
+    int len = length >> TARGET_PAGE_BITS;
+    /* XXX: should not depend on cpu context */
+    env = first_cpu;
+    if (env->kqemu_enabled) {
+        ram_addr_t addr;
+        addr = start;
+        for(i = 0; i < len; i++) {
+            kqemu_set_notdirty(env, addr);
+            addr += TARGET_PAGE_SIZE;
+        }
+   }
+#endif
     cpu_physical_memory_mask_dirty_range(start, length, dirty_flags);
 
     /* we modify the TLB cache so that the dirty bit will be set again
@@ -2574,6 +2599,11 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
     ram_addr_t orig_size = size;
     subpage_t *subpage;
 
+#ifdef CONFIG_KQEMU
+    /* XXX: should not depend on cpu context */
+    env = first_cpu;
+#endif
+
     cpu_notify_set_memory(start_addr, size, phys_offset);
 
     if (phys_offset == IO_MEM_UNASSIGNED) {
@@ -2666,6 +2696,25 @@ void qemu_unregister_coalesced_mmio(target_phys_addr_t addr, ram_addr_t size)
     if (kvm_enabled())
         kvm_uncoalesce_mmio_region(addr, size);
 }
+
+#ifdef CONFIG_KQEMU
+/* XXX: better than nothing */
+static ram_addr_t kqemu_ram_alloc(ram_addr_t size)
+{
+    //ram_list.last_offset += size;
+    ram_addr_t addr;
+    if ((ram_list.last_offset + size) > kqemu_phys_ram_size) {
+        fprintf(stderr, "Not enough memory (requested_size = %" PRIu64 ", max memory = %" PRIu64 ")\n",
+                (uint64_t)size, (uint64_t)kqemu_phys_ram_size);
+        fprintf (stderr, "last offset is:%d\n", ram_list.last_offset);
+        abort();
+    }
+    addr = ram_list.last_offset;
+    ram_list.last_offset = TARGET_PAGE_ALIGN(ram_list.last_offset + size);
+    return addr;
+}
+#endif
+
 
 void qemu_flush_coalesced_mmio_buffer(void)
 {
@@ -2770,6 +2819,11 @@ ram_addr_t qemu_ram_alloc(ram_addr_t size)
 {
     RAMBlock *new_block;
 
+#ifdef CONFIG_KQEMU
+    if (kqemu_phys_ram_base) {
+        return kqemu_ram_alloc(size);
+    }
+#endif
     size = TARGET_PAGE_ALIGN(size);
     new_block = qemu_malloc(sizeof(*new_block));
 
@@ -2834,6 +2888,12 @@ void *qemu_get_ram_ptr(ram_addr_t addr)
 {
     RAMBlock *block;
 
+#ifdef CONFIG_KQEMU
+    if (kqemu_phys_ram_base) {
+        return kqemu_phys_ram_base + addr;
+    }
+#endif
+
     QLIST_FOREACH(block, &ram_list.blocks, next) {
         if (addr - block->offset < block->length) {
             QLIST_REMOVE(block, next);
@@ -2854,6 +2914,12 @@ ram_addr_t qemu_ram_addr_from_host(void *ptr)
 {
     RAMBlock *block;
     uint8_t *host = ptr;
+
+#ifdef CONFIG_KQEMU
+    if (kqemu_phys_ram_base) {
+        return host - kqemu_phys_ram_base;
+    }
+#endif
 
     QLIST_FOREACH(block, &ram_list.blocks, next) {
         if (host - block->host < block->length) {
@@ -2954,6 +3020,11 @@ static void notdirty_mem_writeb(void *opaque, target_phys_addr_t ram_addr,
 #endif
     }
     stb_p(qemu_get_ram_ptr(ram_addr), val);
+#ifdef CONFIG_KQEMU
+    if (cpu_single_env->kqemu_enabled &&
+        (dirty_flags & KQEMU_MODIFY_PAGE_MASK) != KQEMU_MODIFY_PAGE_MASK)
+        kqemu_modify_page(cpu_single_env, ram_addr);
+#endif
     dirty_flags |= (0xff & ~CODE_DIRTY_FLAG);
     cpu_physical_memory_set_dirty_flags(ram_addr, dirty_flags);
     /* we remove the notdirty callback only if the code has been
@@ -2974,6 +3045,11 @@ static void notdirty_mem_writew(void *opaque, target_phys_addr_t ram_addr,
 #endif
     }
     stw_p(qemu_get_ram_ptr(ram_addr), val);
+#ifdef CONFIG_KQEMU
+    if (cpu_single_env->kqemu_enabled &&
+        (dirty_flags & KQEMU_MODIFY_PAGE_MASK) != KQEMU_MODIFY_PAGE_MASK)
+        kqemu_modify_page(cpu_single_env, ram_addr);
+#endif
     dirty_flags |= (0xff & ~CODE_DIRTY_FLAG);
     cpu_physical_memory_set_dirty_flags(ram_addr, dirty_flags);
     /* we remove the notdirty callback only if the code has been
@@ -2994,6 +3070,11 @@ static void notdirty_mem_writel(void *opaque, target_phys_addr_t ram_addr,
 #endif
     }
     stl_p(qemu_get_ram_ptr(ram_addr), val);
+#ifdef CONFIG_KQEMU
+    if (cpu_single_env->kqemu_enabled &&
+        (dirty_flags & KQEMU_MODIFY_PAGE_MASK) != KQEMU_MODIFY_PAGE_MASK)
+        kqemu_modify_page(cpu_single_env, ram_addr);
+#endif
     dirty_flags |= (0xff & ~CODE_DIRTY_FLAG);
     cpu_physical_memory_set_dirty_flags(ram_addr, dirty_flags);
     /* we remove the notdirty callback only if the code has been
@@ -3312,6 +3393,13 @@ static void io_mem_init(void)
 
     io_mem_watch = cpu_register_io_memory(watch_mem_read,
                                           watch_mem_write, NULL);
+#ifdef CONFIG_KQEMU
+    if (kqemu_phys_ram_base) {
+        /* alloc dirty bits array */
+        ram_list.phys_dirty = qemu_vmalloc(kqemu_phys_ram_size >> TARGET_PAGE_BITS);
+        memset(ram_list.phys_dirty, 0xff, kqemu_phys_ram_size >> TARGET_PAGE_BITS);
+    }
+#endif
 }
 
 #endif /* !defined(CONFIG_USER_ONLY) */

@@ -255,9 +255,14 @@ static inline int64_t profile_getclock(void)
     return cpu_get_real_ticks();
 }
 
+extern int64_t kqemu_time, kqemu_time_start;
 extern int64_t qemu_time, qemu_time_start;
 extern int64_t tlb_flush_time;
+extern int64_t kqemu_exec_count;
 extern int64_t dev_time;
+extern int64_t kqemu_ret_int_count;
+extern int64_t kqemu_ret_excp_count;
+extern int64_t kqemu_ret_intr_count;
 #endif
 
 #endif

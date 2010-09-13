@@ -898,6 +898,7 @@ extern int mem_prealloc;
 
 #define VGA_DIRTY_FLAG       0x01
 #define CODE_DIRTY_FLAG      0x02
+#define KQEMU_DIRTY_FLAG     0x04
 #define MIGRATION_DIRTY_FLAG 0x08
 
 /* read dirty bit (return 0 or 1) */

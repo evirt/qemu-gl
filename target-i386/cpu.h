@@ -692,6 +692,11 @@ typedef struct CPUX86State {
     uint64_t mtrr_deftype;
     MTRRVar mtrr_var[8];
 
+#ifdef CONFIG_KQEMU
+    int kqemu_enabled;
+    int last_io_time;
+#endif
+
     /* For KVM */
     uint32_t mp_state;
     int32_t exception_injected;
@@ -879,6 +884,15 @@ uint64_t cpu_get_tsc(CPUX86State *env);
 #define X86_DUMP_FPU  0x0001 /* dump FPU state too */
 #define X86_DUMP_CCOP 0x0002 /* dump qemu flag cache */
 
+#ifdef CONFIG_KQEMU
+static inline int cpu_get_time_fast(void)
+{
+    int low, high;
+    asm volatile("rdtsc" : "=a" (low), "=d" (high));
+    return low;
+}
+#endif
+
 #define TARGET_PAGE_BITS 12
 
 #ifdef TARGET_X86_64
@@ -888,7 +902,11 @@ uint64_t cpu_get_tsc(CPUX86State *env);
    is handled via other mechanisms.  */
 #define TARGET_VIRT_ADDR_SPACE_BITS 47
 #else
+#if defined (CONFIG_KQEMU)
+#define TARGET_PHYS_ADDR_SPACE_BITS 32
+#else
 #define TARGET_PHYS_ADDR_SPACE_BITS 36
+#endif
 #define TARGET_VIRT_ADDR_SPACE_BITS 32
 #endif
 

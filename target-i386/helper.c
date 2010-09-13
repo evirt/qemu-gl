@@ -523,11 +523,15 @@ int cpu_x86_handle_mmu_fault(CPUX86State *env, target_ulong addr,
 
 /* XXX: This value should match the one returned by CPUID
  * and in exec.c */
+#if defined(CONFIG_KQEMU)
+#define PHYS_ADDR_MASK 0xfffff000LL
+#else
 # if defined(TARGET_X86_64)
 # define PHYS_ADDR_MASK 0xfffffff000LL
 # else
 # define PHYS_ADDR_MASK 0xffffff000LL
 # endif
+#endif
 
 /* return value:
    -1 = cannot handle fault
@@ -1138,6 +1142,10 @@ CPUX86State *cpu_x86_init(const char *cpu_model)
         return NULL;
     }
     mce_init(env);
+
+#ifdef CONFIG_KQEMU
+    kqemu_init(env);
+#endif
 
     qemu_init_vcpu(env);
 
