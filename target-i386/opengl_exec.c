@@ -918,10 +918,16 @@ static const int beginend_allowed[GL_N_CALLS] = {
 #include "gl_beginend.h"
 };
 
-ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
+ProcessStruct *vmgl_get_process(pid_t pid)
 {
     ProcessState *process = NULL;
     int i;
+    static int first;
+
+    if(!first) {
+        first = 1;
+        init_process_tab();
+    }
 
     /* Lookup a process stuct. If there isnt one associated with this pid
      * then we create one.
@@ -938,9 +944,6 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
             process->p.process_id = pid;
             init_gl_state(&process->default_state);
             process->current_state = &process->default_state;
-#if 0 //GW
-            process->dpy = parent_dpy;
-#endif
             break;
         }
 
@@ -949,17 +952,18 @@ ProcessStruct *vmgl_context_switch(pid_t pid, int switch_gl_context)
         exit(-1);
     }
 
+    return (ProcessStruct *)process; // Cast is ok due to struct defn.
+}
+
+void vmgl_context_switch(ProcessStruct *p, int switch_gl_context)
+{
+    ProcessState *process = (ProcessState *)p;
     if(switch_gl_context) {
-//        DEBUGF( "Ctx switch: pid: %d    %08x %08x %08x\n", pid,
-//                process->dpy, process->current_state->drawable,
-//                process->current_state->context);
         if(process->current_state->current_qsurface)
             glo_surface_makecurrent(process->current_state->current_qsurface->surface);
         else
             glo_surface_makecurrent(0); // FIXMEIM - should never happen
     }
-
-    return (ProcessStruct *)process; // Cast is ok due to struct defn.
 }
 
 int do_function_call(ProcessState *process, int func_number, arg_t *args, char *ret_string)

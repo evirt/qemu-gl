@@ -200,30 +200,25 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
     return 1;
 }
 
-int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer)
+int decode_call_int(ProcessStruct *process, char *in_args, int args_len, char *r_buffer)
 {
-    static ProcessStruct *process = NULL;
-    static int first;
+    static ProcessStruct *cur_process = NULL;
     int ret;
     int first_func = *(short*)in_args;
-
-    if(!first) {
-        first = 1;
-        init_process_tab();
-    }
 
     /* Select the appropriate context for this pid if it isnt already active
      * Note: if we're about to execute glXMakeCurrent() then we tell the
      * renderer not to waste its time switching contexts
      */
 
-    if (!process || process->process_id != pid)
-	process =
-           vmgl_context_switch(pid, (first_func == glXMakeCurrent_func)?0:1);
+    if (cur_process != process) {
+        cur_process = process;
+        vmgl_context_switch(cur_process, (first_func == glXMakeCurrent_func)?0:1);
+    }
 
     if(unlikely(first_func == _init32_func || first_func == _init64_func)) {
-        if(!process->wordsize) {
-            process->wordsize = first_func == _init32_func?4:8;
+        if(!cur_process->wordsize) {
+            cur_process->wordsize = first_func == _init32_func?4:8;
             *(int*)r_buffer = 2; // Indicate that we can buffer commands
             return 1; // Initialisation done
         }
@@ -233,17 +228,14 @@ int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer)
         }
     }
 
-    if(unlikely(first_func == -1 || !process->wordsize)) {
-        if(!process->wordsize && first_func != -1)
+    if(unlikely(first_func == -1 || !cur_process->wordsize)) {
+        if(!cur_process->wordsize && first_func != -1)
             DEBUGF("commands submitted before process init.\n");
         ret = 0;
     }
     else {
-        ret = do_decode_call_int(process, in_args, args_len, r_buffer);
+        ret = do_decode_call_int(cur_process, in_args, args_len, r_buffer);
     }
-
-    if(!ret)
-        disconnect(process);
 
     return ret;
 }
