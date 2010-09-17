@@ -177,7 +177,6 @@ void glo_context_destroy(GloContext *context) {
   if (!context) return;
 
   // TODO: check for GloSurfaces using this?
-  fprintf(stderr, "Dst: %p\n", context->context);
   glXDestroyContext( glo.dpy, context->context);
   qemu_free(context);
 }
