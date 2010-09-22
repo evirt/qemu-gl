@@ -99,7 +99,6 @@ static void sdl_setdata(DisplayState *ds)
 
 static void do_sdl_resize(int new_width, int new_height, int bpp)
 {
-    SDL_SysWMinfo info;
     int flags;
 
     //    printf("resizing to %d %d\n", w, h);
@@ -117,12 +116,6 @@ static void do_sdl_resize(int new_width, int new_height, int bpp)
 	fprintf(stderr, "Could not open SDL display (%dx%dx%d): %s\n", width, 
 		height, bpp, SDL_GetError());
         exit(1);
-    }
-
-    SDL_VERSION(&info.version);
-    if(!SDL_GetWMInfo(&info)) {
-	fprintf(stderr, "SDL fail\n");
-	exit(1);
     }
 }
 
@@ -819,7 +812,6 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
 {
     int flags;
     uint8_t data = 0;
-    SDL_SysWMinfo info;
     DisplayAllocator *da;
     const SDL_VideoInfo *vi;
 
@@ -848,13 +840,6 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
         fprintf(stderr, "Could not initialize SDL(%s) - exiting\n",
                 SDL_GetError());
         exit(1);
-    }
-
-    // FIXMEIM - likely un-needed - sdl_create_display_surface also does this.
-    SDL_VERSION(&info.version);
-    if(!SDL_GetWMInfo(&info)) {
-	fprintf(stderr, "SDL fail\n");
-	exit(1);
     }
 
     vi = SDL_GetVideoInfo();
