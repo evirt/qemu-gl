@@ -34,6 +34,7 @@ typedef target_phys_addr_t arg_t;
 
 int decode_call_int(ProcessStruct *p, char *in_args, int args_len, char *r_buffer);
 
+/* Uncomment to enable debugging - WARNING!!! changes ABI! */
 //#define DEBUG_GLIO
 
 typedef struct VirtIOGL
@@ -44,19 +45,19 @@ typedef struct VirtIOGL
 
 struct d_hdr
 {
-	int pid;
-	int rq_l;
-	int rrq_l;
+    int pid;
+    int rq_l;
+    int rrq_l;
 #ifdef DEBUG_GLIO
-	int sum;
+    int sum;
 #endif
 };
 
+#define SIZE_OUT_HEADER sizeof(struct d_hdr)
+
 #ifdef DEBUG_GLIO
-#define SIZE_OUT_HEADER (4*4)
 #define SIZE_IN_HEADER (4*2)
 #else
-#define SIZE_OUT_HEADER (4*3)
 #define SIZE_IN_HEADER 4
 #endif
 
@@ -67,30 +68,30 @@ static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
 
     while(virtqueue_pop(vq, &elem)) {
         struct d_hdr *hdr = (struct d_hdr*)elem.out_sg[0].iov_base;
-	ProcessStruct *process;
+        ProcessStruct *process;
         int i, remain;
-	int ret = 0;
+        int ret = 0;
 
-	if(!elem.out_num) {
-		fprintf(stderr, "Bad packet\n");
-		goto done;
-	}
+if(!elem.out_num) {
+fprintf(stderr, "Bad packet\n");
+goto done;
+}
 
-	process = vmgl_get_process(hdr->pid);
+process = vmgl_get_process(hdr->pid);
 
         if(hdr->rq_l) {
 
             if(hdr->rrq_l) {
-		if(process->rq) {  // Usually only the quit packet...
-			free(process->rq);
-			free(process->rrq);
-		}
+                if(process->rq) {  // Usually only the quit packet...
+                    free(process->rq);
+                    free(process->rrq);
+                }
                 process->rq  = process->rq_p  = qemu_malloc(hdr->rq_l);
                 process->rrq = process->rrq_p = qemu_malloc(hdr->rrq_l);
-                process->rq_l  = hdr->rq_l - sizeof(*hdr);
+                process->rq_l  = hdr->rq_l - SIZE_OUT_HEADER;
                 process->rrq_l = hdr->rrq_l;
 #ifdef DEBUG_GLIO
-		process->sum = hdr->sum;
+                process->sum = hdr->sum;
 #endif
             }
 
@@ -102,8 +103,8 @@ static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
                 int len = remain;
 
                 if(i == 0) {
-                    src += sizeof(*hdr);
-                    ilen -= sizeof(*hdr);
+                    src += SIZE_OUT_HEADER;
+                    ilen -= SIZE_OUT_HEADER;
                 }
 
                 if(len > ilen)
@@ -131,7 +132,7 @@ static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
                                 process->rrq + SIZE_IN_HEADER);    /* return buffer */
 
                 qemu_free(process->rq);
-		process->rq = NULL;
+                process->rq = NULL;
 
 #ifdef DEBUG_GLIO
                 sum = 0;
@@ -164,10 +165,10 @@ static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
 
             if(remain <= 0) {
                 qemu_free(process->rrq);
-		if(!nkill)
-			disconnect(process);
-	    }
-        }
+                if(!nkill)
+                    disconnect(process);
+            }
+       }
 done:
         virtqueue_push(vq, &elem, ret);
 
@@ -201,9 +202,8 @@ static int virtio_gl_load(QEMUFile *f, void *opaque, int version_id)
 VirtIODevice *virtio_gl_init(DeviceState *dev)
 {
     VirtIOGL *s;
-    s = (VirtIOGL *)virtio_common_init("virtio-gl",
-                                            VIRTIO_ID_GL,
-                                            0, sizeof(VirtIOGL));
+    s = (VirtIOGL *)virtio_common_init("virtio-gl", VIRTIO_ID_GL,
+                                       0, sizeof(VirtIOGL));
 
     if (!s)
         return NULL;

@@ -30,9 +30,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-/* GW: dyngen-exec.h defines its own version of stuff that is in stdio.h - 
-   only it misses things and is mildly different to stdio \o/. Hence
-   don't include stdio and make our own defines. */
+#include "opengl_func.h"
+#include "opengl_process.h"
+#include "opengl_exec.h"
+
+#include "kvm.h"
 
 #ifdef _WIN32
 #define DEBUGF(...) printf(__VA_ARGS__)
@@ -40,13 +42,6 @@
 extern struct FILE *stderr;		/* Standard error output stream.  */
 #define DEBUGF(...) fprintf(stderr, __VA_ARGS__)
 #endif
-
-
-#include "opengl_func.h"
-#include "opengl_process.h"
-#include "opengl_exec.h"
-
-#include "kvm.h"
 
 /* do_decode_call_int()
  *
@@ -188,12 +183,12 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
     }  // endwhile
 
     switch(signature->ret_type) {
-      case TYPE_INT:
-        memcpy(r_buffer, &ret, sizeof(int));
-        break;
-      case TYPE_CHAR:
-        *r_buffer = ret & 0xff;
-        break;
+        case TYPE_INT:
+            memcpy(r_buffer, &ret, sizeof(int));
+            break;
+        case TYPE_CHAR:
+            *r_buffer = ret & 0xff;
+            break;
     }
 
     return 1;

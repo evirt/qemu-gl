@@ -46,32 +46,32 @@
  */
 
 struct GloMain {
-  HINSTANCE             hInstance;
-  HDC                   hDC;
-  HWND                  hWnd; /* Our hidden window */
-  HGLRC                 hContext;
+    HINSTANCE             hInstance;
+    HDC                   hDC;
+    HWND                  hWnd; /* Our hidden window */
+    HGLRC                 hContext;
 };
 struct GloMain glo;
 int glo_inited = 0;
 
 struct _GloContext {
-  int                   formatFlags;
+    int                   formatFlags;
 
-  /* Pixel format returned by wglChoosePixelFormat */
-  int                   wglPixelFormat;
-  /* We need a pbuffer to make a context of the right pixelformat :( */
-  HPBUFFERARB           hPBuffer; 
-  HDC                   hDC;
-  HGLRC                 hContext;
+    /* Pixel format returned by wglChoosePixelFormat */
+    int                   wglPixelFormat;
+    /* We need a pbuffer to make a context of the right pixelformat :( */
+    HPBUFFERARB           hPBuffer; 
+    HDC                   hDC;
+    HGLRC                 hContext;
 };
 
 struct _GloSurface {
-  GLuint                width;
-  GLuint                height;  
+    GLuint                width;
+    GLuint                height;  
 
-  GloContext           *context;
-  HPBUFFERARB           hPBuffer;
-  HDC                   hDC;
+    GloContext           *context;
+    HPBUFFERARB           hPBuffer;
+    HDC                   hDC;
 };
 
 #define GLO_WINDOW_CLASS "QEmuGLClass"
@@ -93,7 +93,7 @@ extern void glo_surface_getcontents_readpixels(int formatFlags, int stride,
 /* ------------------------------------------------------------------------ */
 
 int glo_initialised(void) {
-  return glo_inited;
+    return glo_inited;
 }
 
 /* Initialise gloffscreen */
@@ -130,8 +130,8 @@ void glo_init(void) {
         (LPVOID) NULL);
 
     if (!glo.hWnd) {
-      printf( "Unable to create window\n" );
-      exit( EXIT_FAILURE );
+        printf( "Unable to create window\n" );
+        exit( EXIT_FAILURE );
     }
     glo.hDC = GetDC(glo.hWnd);
 
@@ -149,8 +149,8 @@ void glo_init(void) {
 
     glo.hContext = wglCreateContext(glo.hDC);
     if (glo.hContext == NULL) {
-      printf( "Unable to create GL context\n" );
-      exit( EXIT_FAILURE );
+        printf( "Unable to create GL context\n" );
+        exit( EXIT_FAILURE );
     }
     wglMakeCurrent(glo.hDC, glo.hContext);
 
@@ -171,8 +171,8 @@ void glo_init(void) {
         !wglReleasePbufferDCARB ||
         !wglCreatePbufferARB ||
         !wglDestroyPbufferARB) {
-      printf( "Unable to load the required WGL extensions\n" );
-      exit( EXIT_FAILURE );
+        printf( "Unable to load the required WGL extensions\n" );
+        exit( EXIT_FAILURE );
     }
 
     glo_inited = 1;
@@ -181,23 +181,23 @@ void glo_init(void) {
 /* Uninitialise gloffscreen */
 void glo_kill(void) {
     if (glo.hContext) {
-      wglMakeCurrent(NULL, NULL);
-      wglDeleteContext(glo.hContext);
-      glo.hContext = NULL;
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext(glo.hContext);
+        glo.hContext = NULL;
     }
     if (glo.hDC) {
-      ReleaseDC(glo.hWnd, glo.hDC);
-      glo.hDC = NULL;
+        ReleaseDC(glo.hWnd, glo.hDC);
+        glo.hDC = NULL;
     }
     if (glo.hWnd) {
-      DestroyWindow(glo.hWnd);
-      glo.hWnd = NULL;
+        DestroyWindow(glo.hWnd);
+        glo.hWnd = NULL;
     }
     UnregisterClass(GLO_WINDOW_CLASS, glo.hInstance);
 }
 
 const char *glo_glXQueryExtensionsString(void) {
-  return "";
+    return "";
 }
 
 
@@ -584,7 +584,7 @@ void *glo_getprocaddress(const char *procName) {
     HGLRC oldCtx;
     HDC oldDC;
     if (!glo_inited)
-      glo_init();
+        glo_init();
 
     oldCtx = wglGetCurrentContext();
     oldDC = wglGetCurrentDC();
@@ -628,16 +628,16 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
     GloContext *context;
     // pixel format attributes
     int          pf_attri[] = {
-       WGL_SUPPORT_OPENGL_ARB, TRUE,      
-       WGL_DRAW_TO_PBUFFER_ARB, TRUE,     
-       WGL_RED_BITS_ARB, 8,             
-       WGL_GREEN_BITS_ARB, 8,            
-       WGL_BLUE_BITS_ARB, 8,            
-       WGL_ALPHA_BITS_ARB, 8,
-       WGL_DEPTH_BITS_ARB, 0,
-       WGL_STENCIL_BITS_ARB, 0,
-       WGL_DOUBLE_BUFFER_ARB, FALSE,      
-       0                                
+        WGL_SUPPORT_OPENGL_ARB, TRUE,      
+        WGL_DRAW_TO_PBUFFER_ARB, TRUE,     
+        WGL_RED_BITS_ARB, 8,             
+        WGL_GREEN_BITS_ARB, 8,            
+        WGL_BLUE_BITS_ARB, 8,            
+        WGL_ALPHA_BITS_ARB, 8,
+        WGL_DEPTH_BITS_ARB, 0,
+        WGL_STENCIL_BITS_ARB, 0,
+        WGL_DOUBLE_BUFFER_ARB, FALSE,      
+        0                                
     };
     float        pf_attrf[] = {0, 0};
     unsigned int numReturned = 0;
@@ -646,7 +646,7 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
 
 
     if (!glo_inited)
-      glo_init();
+        glo_init();
 
     context = (GloContext*)malloc(sizeof(GloContext));
     memset(context, 0, sizeof(GloContext));
@@ -672,24 +672,24 @@ GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
     context->hPBuffer = wglCreatePbufferARB( glo.hDC, context->wglPixelFormat, 
                                              16, 16, pb_attr );
     if( !context->hPBuffer ) {
-      printf( "Couldn't create the PBuffer\n" );
-      exit( EXIT_FAILURE );
+        printf( "Couldn't create the PBuffer\n" );
+        exit( EXIT_FAILURE );
     }
     context->hDC      = wglGetPbufferDCARB( context->hPBuffer );
     if( !context->hDC ) {
-      printf( "Couldn't create the DC\n" );
-      exit( EXIT_FAILURE );
+        printf( "Couldn't create the DC\n" );
+        exit( EXIT_FAILURE );
     }
 
     context->hContext = wglCreateContext(context->hDC);
     if (context->hContext == NULL) {
-      printf( "Unable to create GL context\n" );
-      exit( EXIT_FAILURE );
+        printf( "Unable to create GL context\n" );
+        exit( EXIT_FAILURE );
     }
 
     if (shareLists) {
-      // Need to share lists...
-      wglShareLists(shareLists->hContext, context->hContext);
+        // Need to share lists...
+        wglShareLists(shareLists->hContext, context->hContext);
     }
 
     return context;
@@ -708,7 +708,7 @@ void glo_context_destroy(GloContext *context) {
         ReleaseDC( glo.hWnd, context->hDC );
     }
     if (context->hContext) {
-      wglDeleteContext(context->hContext);
+        wglDeleteContext(context->hContext);
     }
     free(context);
 }
@@ -731,13 +731,13 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     surface->hPBuffer = wglCreatePbufferARB( glo.hDC, context->wglPixelFormat, 
                                              surface->width, surface->height, pb_attr );
     if( !surface->hPBuffer ) {
-      printf( "Couldn't create the PBuffer\n" );
-      exit( EXIT_FAILURE );
+        printf( "Couldn't create the PBuffer\n" );
+        exit( EXIT_FAILURE );
     }
     surface->hDC      = wglGetPbufferDCARB( surface->hPBuffer );
     if( !surface->hDC ) {
-      printf( "Couldn't create the DC\n" );
-      exit( EXIT_FAILURE );
+        printf( "Couldn't create the DC\n" );
+        exit( EXIT_FAILURE );
     }
 
     return surface;
@@ -761,9 +761,9 @@ void glo_surface_destroy(GloSurface *surface) {
 /* Make the given surface current */
 int glo_surface_makecurrent(GloSurface *surface) {
   if (surface) {
-    return wglMakeCurrent( surface->hDC, surface->context->hContext );
+      return wglMakeCurrent( surface->hDC, surface->context->hContext );
   } else {
-    return wglMakeCurrent( NULL, NULL );
+      return wglMakeCurrent( NULL, NULL );
   }
 }
 
@@ -771,7 +771,7 @@ int glo_surface_makecurrent(GloSurface *surface) {
 void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *data) {
 
   if (!surface)
-    return;
+      return;
   // Compatible / fallback method.
   glo_surface_getcontents_readpixels(surface->context->formatFlags,
                                         stride, bpp, surface->width,
@@ -781,14 +781,14 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
 /* Return the width and height of the given surface */
 void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
     if (width)
-      *width = surface->width;
+        *width = surface->width;
     if (height)
-      *height = surface->height;
+        *height = surface->height;
 }
 
 /* Fake glXQueryExtensionsString() */
 const char *glo_glXQueryExtensionsString(void) {
-  return "";
+    return "";
 }
 
 #endif

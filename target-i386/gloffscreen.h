@@ -54,7 +54,7 @@ typedef struct _GloSurface GloSurface;
 #define GLO_FF_STENCIL_8      (0x1000)
 
 /* The only currently supported format */
-#define GLO_FF_DEFAULT     (GLO_FF_BITS_24|GLO_FF_DEPTH_24)//(GLO_FF_BITS_32|GLO_FF_ALPHA)
+#define GLO_FF_DEFAULT     (GLO_FF_BITS_24|GLO_FF_DEPTH_24)
 
 /* Has gloffscreen been previously initialised? */
 extern int glo_initialised(void);

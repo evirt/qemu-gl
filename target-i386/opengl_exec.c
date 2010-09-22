@@ -109,23 +109,23 @@ void qemu_free(void *ptr);
 #define glGetError() 0
 
 #define GET_EXT_PTR(type, funcname, args_decl) \
-      static int detect_##funcname = 0; \
-      static type(*ptr_func_##funcname)args_decl = NULL; \
-      if (detect_##funcname == 0) \
-      { \
+    static int detect_##funcname = 0; \
+    static type(*ptr_func_##funcname)args_decl = NULL; \
+    if (detect_##funcname == 0) \
+    { \
         detect_##funcname = 1; \
         ptr_func_##funcname = (type(*)args_decl)glo_getprocaddress((const char*)#funcname); \
         assert (ptr_func_##funcname); \
-      }
+    }
 
 #define GET_EXT_PTR_NO_FAIL(type, funcname, args_decl) \
-      static int detect_##funcname = 0; \
-      static type(*ptr_func_##funcname)args_decl = NULL; \
-      if (detect_##funcname == 0) \
-      { \
+    static int detect_##funcname = 0; \
+    static type(*ptr_func_##funcname)args_decl = NULL; \
+    if (detect_##funcname == 0) \
+    { \
         detect_##funcname = 1; \
         ptr_func_##funcname = (type(*)args_decl)glo_getprocaddress((const char*)#funcname); \
-      }
+    }
 
 #ifndef WIN32
 #include <dlfcn.h>
@@ -157,13 +157,13 @@ static void *get_glu_ptr(const char *name)
 }
 
 #define GET_GLU_PTR(type, funcname, args_decl) \
-      static int detect_##funcname = 0; \
-      static type(*ptr_func_##funcname)args_decl = NULL; \
-      if (detect_##funcname == 0) \
-      { \
+    static int detect_##funcname = 0; \
+    static type(*ptr_func_##funcname)args_decl = NULL; \
+    if (detect_##funcname == 0) \
+    { \
         detect_##funcname = 1; \
         ptr_func_##funcname = (type(*)args_decl)get_glu_ptr(#funcname); \
-      }
+    }
 
 int display_function_call = 0;
 extern int kill_process;
@@ -193,12 +193,12 @@ typedef void *ClientGLXDrawable;
 typedef struct GLState GLState;
 
 typedef struct QGloSurface {
-  GLState *glstate;
-  GloSurface *surface;
-  ClientGLXDrawable *client_drawable;
-  int ready;
-  int ref;
-  QTAILQ_ENTRY(QGloSurface) next;
+    GLState *glstate;
+    GloSurface *surface;
+    ClientGLXDrawable *client_drawable;
+    int ready;
+    int ref;
+    QTAILQ_ENTRY(QGloSurface) next;
 } QGloSurface;
 
 struct GLState {
@@ -293,30 +293,30 @@ typedef struct {
 static ProcessState processes[MAX_HANDLED_PROCESS];
 
 static char *strip_extensions(const char *avail, const char *ext[]) {
-  char *pos, *supported, *srcp;
+    char *pos, *supported, *srcp;
 
-  supported = (char *)qemu_malloc(strlen(avail) + 2);
+    supported = (char *)qemu_malloc(strlen(avail) + 2);
 
-  pos = supported;
-  while(*ext) {
-    srcp = (char*)avail;
-    while((srcp = strstr(srcp, *ext))) {
-      int len = strlen(*ext);
-      if(*(srcp+len) == ' ' || *(srcp+len) == '\0') {
-        strcpy(pos, *ext);
-        pos += len;
-        if(*(srcp+len) == ' ') {
-          *pos = ' ';
-          pos++;
+    pos = supported;
+    while(*ext) {
+        srcp = (char*)avail;
+        while((srcp = strstr(srcp, *ext))) {
+            int len = strlen(*ext);
+            if(*(srcp+len) == ' ' || *(srcp+len) == '\0') {
+                strcpy(pos, *ext);
+                pos += len;
+                if(*(srcp+len) == ' ') {
+                    *pos = ' ';
+                    pos++;
+                }
+                break;
+            }
+            srcp += len;
         }
-        break;
-      }
-      srcp += len;
+        ext++;
     }
-    ext++;
-  }
-  *pos = ' ';
-  *pos = '\0';
+    *pos = ' ';
+    *pos = '\0';
 
   return supported;
 }
@@ -327,13 +327,13 @@ static const char *glx_ext_supported[] = {
 };
 
 static char *supported_glx_extensions() {
-  static char *supported;
+    static char *supported;
 
-  if(!supported)
-    supported = strip_extensions(glo_glXQueryExtensionsString(),
-                                 glx_ext_supported);
+    if(!supported)
+      supported = strip_extensions(glo_glXQueryExtensionsString(),
+                                   glx_ext_supported);
 
-  return supported;
+    return supported;
 }
 
 static const char *gl_ext_supported[] = {
@@ -385,7 +385,7 @@ static const char *gl_ext_supported[] = {
     "GL_SGIS_texture_border_clamp",
     "GL_SGIS_texture_edge_clamp",
     "GL_SGIS_texture_lod",
-// Optional extensions If you get problems try disabling the below.
+// Optional extensions. If you get problems try disabling the below.
     "GL_EXT_compiled_vertex_array",
     "GL_ARB_copy_buffer",
     "GL_ARB_depth_clamp",
@@ -461,13 +461,13 @@ static const char *gl_ext_supported[] = {
 };
 
 static char *compute_gl_extensions() {
-  static char *supported;
+    static char *supported;
 
-  if(!supported)
-    supported = strip_extensions((const char *)glGetString(GL_EXTENSIONS),
-                                 gl_ext_supported);
+    if(!supported)
+        supported = strip_extensions((const char *)glGetString(GL_EXTENSIONS),
+                                     gl_ext_supported);
 
-  return supported;
+    return supported;
 }
 
 static inline QGloSurface *get_qsurface_from_client_drawable(GLState *state, ClientGLXDrawable client_drawable) {
@@ -492,12 +492,6 @@ static inline void render_surface(QGloSurface *qsurface, int bpp, int stride, ch
 	return;
 
     glo_surface_get_size(qsurface->surface, &w, &h);
-//    for(x = 0 ; x < w ; x++)
-//	for(y = 0 ; y < h ; y++){
-//		char *p = buffer + y*stride + x*3;
-//		int *pixel = (int*)p;
-//		*pixel = (int)buffer;
-//	}
 
     glo_surface_getcontents(qsurface->surface, stride, bpp, buffer);
 }
@@ -522,8 +516,8 @@ static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
     }
     else {
         DEBUGF("Error: Surface is not current! %p %p\n",
-            process->current_state,
-            process->current_state->current_qsurface);
+               process->current_state,
+               process->current_state->current_qsurface);
         exit(1);
     }
 
@@ -563,9 +557,8 @@ static inline ClientGLXDrawable to_drawable(arg_t arg)
 /* ---- */
 
 /* Bind a qsurface to a context (GLState) */
-static void bind_qsurface(
-                GLState *state,
-                QGloSurface *qsurface)
+static void bind_qsurface(GLState *state,
+                          QGloSurface *qsurface)
 {
     qsurface->glstate = state;
 
@@ -575,9 +568,9 @@ static void bind_qsurface(
 }
 
 /* Make the appropriate qsurface current for a given client_drawable */
-static int set_current_qsurface(
-                 GLState *state,
-                 ClientGLXDrawable client_drawable) {
+static int set_current_qsurface(GLState *state,
+                                ClientGLXDrawable client_drawable)
+{
     QGloSurface *qsurface;
 
     if(state->current_qsurface && state->current_qsurface->client_drawable == client_drawable)
@@ -660,69 +653,76 @@ static int glXChooseVisualFunc(const int *attrib_list)
     int bestScore = -1;
 
     for (i=0;i<DIM(FBCONFIGS);i++) {
-      int score = glo_flags_score(formatFlags, FBCONFIGS[i].formatFlags);
-      if (bestScore < 0 || score<=bestScore) {
-        bestScore = score;
-        bestConfig = i;
-      }
+        int score = glo_flags_score(formatFlags, FBCONFIGS[i].formatFlags);
+        if (bestScore < 0 || score<=bestScore) {
+            bestScore = score;
+            bestConfig = i;
+        }
     }
 
     if (bestScore > 0)
-      DEBUGF( "Got format flags %d but we couldn't find an exactly matching config, chose %d\n", formatFlags, bestConfig);
-    DEBUGF( "glXChooseVisualFunc chose %d, format %d\n", bestConfig, FBCONFIGS[bestConfig].formatFlags);
+        DEBUGF( "Got format flags %d but we couldn't find an exactly matching config, chose %d\n", formatFlags, bestConfig);
+
     return bestConfig;
 }
 
 static int glXGetConfigFunc(int visualid, int attrib, int *value) {
-  const GLXFBConfig *config = &FBCONFIGS[0]; // default
+    const GLXFBConfig *config = &FBCONFIGS[0]; // default
+    int v;
 
-  if (visualid>=0 && visualid<DIM(FBCONFIGS))
-    config = &FBCONFIGS[visualid];
-  else
-    DEBUGF( "Unknown visual ID %d\n", visualid);
+    if (visualid>=0 && visualid<DIM(FBCONFIGS))
+        config = &FBCONFIGS[visualid];
+    else
+        DEBUGF( "Unknown visual ID %d\n", visualid);
 
-  int v = glo_get_glx_from_flags(config->formatFlags, attrib);
-  if (value) *value = v;
-  return 0;
+    v = glo_get_glx_from_flags(config->formatFlags, attrib);
+    if (value)
+       *value = v;
+    return 0;
 }
 
 static const GLXFBConfig * glXGetFBConfigsFunc(int screen, int *nelements) {
-  *nelements = DIM(FBCONFIGS);
-  return &FBCONFIGS[0];
+    *nelements = DIM(FBCONFIGS);
+    return &FBCONFIGS[0];
 }
 
 static int glXGetFBConfigAttribFunc(const GLXFBConfig *fbconfig, int attrib, int *value) {
-   // TODO other enums - see http://www.opengl.org/sdk/docs/man/xhtml/glXGetFBConfigAttrib.xml
+    // TODO other enums - see http://www.opengl.org/sdk/docs/man/xhtml/glXGetFBConfigAttrib.xml
 
-   int v = glo_get_glx_from_flags(fbconfig->formatFlags, attrib);
-   if (value) *value = v;
-   return 0;
+    int v = glo_get_glx_from_flags(fbconfig->formatFlags, attrib);
+    if (value) *value = v;
+    return 0;
 }
 
 static const GLXFBConfig *glXChooseFBConfigFunc(int screen, const int *attrib_list, int *nelements) {
-  if (attrib_list != NULL) {
-    int formatFlags = glo_flags_get_from_glx(attrib_list, False);
-    int i;
-    int bestConfig = 0;
-    int bestScore = -1;
+    if (attrib_list != NULL) {
+        int formatFlags = glo_flags_get_from_glx(attrib_list, False);
+        int i;
+        int bestConfig = 0;
+        int bestScore = -1;
 
-    for (i=0;i<DIM(FBCONFIGS);i++) {
-      int score = glo_flags_score(formatFlags, FBCONFIGS[i].formatFlags);
-      if (bestScore < 0 || score<=bestScore) {
-        bestScore = score;
-        bestConfig = i;
-      }
+        for (i=0;i<DIM(FBCONFIGS);i++) {
+            int score = glo_flags_score(formatFlags, FBCONFIGS[i].formatFlags);
+            if (bestScore < 0 || score<=bestScore) {
+                bestScore = score;
+                bestConfig = i;
+            }
+        }
+
+        if (bestScore > 0) {
+            DEBUGF( "Got format flags %d but we couldn't find an exactly matching config, chose %d\n", formatFlags, bestConfig);
+        }
+
+        if (nelements)
+            *nelements=1;
+
+        return &FBCONFIGS[bestConfig];
     }
 
-    if (bestScore > 0)
-      DEBUGF( "Got format flags %d but we couldn't find an exactly matching config, chose %d\n", formatFlags, bestConfig);
-    DEBUGF( "glXChooseVisualFunc chose %d, format %d\n", bestConfig, FBCONFIGS[bestConfig].formatFlags);
-    if (nelements) *nelements=1;
-    return &FBCONFIGS[bestConfig];
-  }
+    if (nelements)
+        *nelements=0;
 
-  if (nelements) *nelements=0;
-  return 0;
+    return 0;
 }
 
 static void do_glClientActiveTextureARB(int texture)
@@ -833,16 +833,15 @@ static GLuint translate_id(GLsizei n, GLenum type, const GLvoid *list)
         return (GLuint) *(fptr + n);
     case GL_2_BYTES:
         ubptr = ((GLubyte *) list) + 2 * n;
-        return (GLuint) *ubptr * 256 + (GLuint) *(ubptr + 1);
+        return (GLuint) (*ubptr << 8) + (GLuint) *(ubptr + 1);
     case GL_3_BYTES:
         ubptr = ((GLubyte *) list) + 3 * n;
-        return (GLuint) *ubptr * 65536 + (GLuint) *(ubptr + 1) * 256 +
+        return (GLuint) (*ubptr << 16) + (GLuint) (*(ubptr + 1) << 8) +
             (GLuint) *(ubptr + 2);
     case GL_4_BYTES:
         ubptr = ((GLubyte *) list) + 4 * n;
-        return (GLuint) *ubptr * 16777216 + (GLuint) *(ubptr + 1) * 65536 +
-            (GLuint) *(ubptr + 2) * 256 + (GLuint) *(ubptr + 3);
-  //FIXMEIM (use better constants)
+        return (GLuint) (*ubptr << 24) + (GLuint) (*(ubptr + 1) << 16) +
+            (GLuint) (*(ubptr + 2) << 8) + (GLuint) *(ubptr + 3);
     default:
         return 0;
     }
@@ -850,15 +849,19 @@ static GLuint translate_id(GLsizei n, GLenum type, const GLvoid *list)
 
 GLState *_create_context(ProcessState *process, int fake_ctxt, int fake_shareList)
 {
-    process->glstates =
-        qemu_realloc(process->glstates,
-                (process->nb_states + 1) * sizeof(GLState *));
+    // FIXMEIM - realloc? really?
+    process->glstates = qemu_realloc(process->glstates,
+                                  (process->nb_states + 1) * sizeof(GLState *));
+
     process->glstates[process->nb_states] = qemu_malloc(sizeof(GLState));
     memset(process->glstates[process->nb_states], 0, sizeof(GLState));
+
     process->glstates[process->nb_states]->ref = 1;
     process->glstates[process->nb_states]->fake_ctxt = fake_ctxt;
     process->glstates[process->nb_states]->fake_shareList = fake_shareList;
+
     init_gl_state(process->glstates[process->nb_states]);
+
     if (fake_shareList) {
         int i;
 
@@ -882,16 +885,17 @@ GLState *_create_context(ProcessState *process, int fake_ctxt, int fake_shareLis
         }
     }
     process->nb_states++;
+
     return process->glstates[process->nb_states-1];
 }
 
 GLState *get_glstate_for_fake_ctxt(ProcessState *process, int fake_ctxt)
 {
-  int i;
-  for (i = 0; i < process->nb_states; i++)
-    if (process->glstates[i]->fake_ctxt == fake_ctxt)
-      return process->glstates[i];
-  return 0;
+    int i;
+    for (i = 0; i < process->nb_states; i++)
+        if (process->glstates[i]->fake_ctxt == fake_ctxt)
+            return process->glstates[i];
+    return 0;
 }
 
 void disconnect(ProcessState *process)
@@ -908,8 +912,8 @@ void disconnect(ProcessState *process)
         qemu_free(process->cmdbuf);
 
     for (i = 0; &processes[i] != process; i ++);
-    memmove(&processes[i], &processes[i + 1],
-                    (MAX_HANDLED_PROCESS - 1 - i) * sizeof(ProcessState));
+        memmove(&processes[i], &processes[i + 1],
+                (MAX_HANDLED_PROCESS - 1 - i) * sizeof(ProcessState));
 }
 
 static const int beginend_allowed[GL_N_CALLS] = {
@@ -921,8 +925,8 @@ static const int beginend_allowed[GL_N_CALLS] = {
 ProcessStruct *vmgl_get_process(pid_t pid)
 {
     ProcessState *process = NULL;
-    int i;
     static int first;
+    int i;
 
     if(!first) {
         first = 1;
@@ -962,7 +966,7 @@ void vmgl_context_switch(ProcessStruct *p, int switch_gl_context)
         if(process->current_state->current_qsurface)
             glo_surface_makecurrent(process->current_state->current_qsurface->surface);
         else
-            glo_surface_makecurrent(0); // FIXMEIM - should never happen
+            glo_surface_makecurrent(0); // should never happen
     }
 }
 
@@ -2917,7 +2921,6 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             break;
         }
 #ifndef _WIN32
-    //FIXME
     case _glDrawRangeElements_buffer_func:
         {
             glDrawRangeElements(args[0], args[1], args[2], args[3], args[4],

@@ -45,30 +45,30 @@ void *qemu_realloc(void *ptr, size_t size);
 void qemu_free(void *ptr);
 
 struct GloMain {
-  Display *dpy;
-  int use_ximage;
+    Display *dpy;
+    int use_ximage;
 };
 struct GloMain glo;
 int glo_inited = 0;
 
 struct _GloContext {
-  GLuint                formatFlags;
+    GLuint                formatFlags;
 
-  GLXFBConfig           fbConfig;
-  GLXContext            context;
+    GLXFBConfig           fbConfig;
+    GLXContext            context;
 };
 
 struct _GloSurface {
-  GLuint                width;
-  GLuint                height;
+    GLuint                width;
+    GLuint                height;
 
-  GloContext           *context;
-  Window                window;
+    GloContext           *context;
+    Window                window;
 
-  // For use by the 'fast' copy code.
-  Pixmap		pixmap;
-  XImage               *image;
-  XShmSegmentInfo       shminfo;
+    // For use by the 'fast' copy code.
+    Pixmap		pixmap;
+    XImage               *image;
+    XShmSegmentInfo       shminfo;
 };
 
 extern void glo_surface_getcontents_readpixels(int formatFlags, int stride,
@@ -78,7 +78,7 @@ static void glo_test_readback_methods(void);
 /* ------------------------------------------------------------------------ */
 
 int glo_initialised(void) {
-  return glo_inited;
+    return glo_inited;
 }
 
 /* Initialise gloffscreen */
@@ -87,13 +87,17 @@ void glo_init(void) {
         printf( "gloffscreen already inited\n" );
         exit( EXIT_FAILURE );
     }
+
     /* Open a connection to the X server */
     glo.dpy = XOpenDisplay( NULL );
     if ( glo.dpy == NULL ) {
         printf( "Unable to open a connection to the X server\n" );
         exit( EXIT_FAILURE );
     }
-    glo_inited = 1;
+
+    glo_inited = 1; // safe because we are single threaded. Otherwise we cause
+                    // recursion on the next call.
+
     glo_test_readback_methods();
 }
 
@@ -107,99 +111,103 @@ void glo_kill(void) {
 /* Like wglGetProcAddress/glxGetProcAddress */
 void *glo_getprocaddress(const char *procName) {
     if (!glo_inited)
-      glo_init();
+        glo_init();
+
     return glXGetProcAddressARB((const GLubyte *) procName);
 }
 
 /* ------------------------------------------------------------------------ */
 
-/* Create an OpenGL context for a certain pixel format. formatflags are from the GLO_ constants */
+/* Create an OpenGL context for a certain pixel format.
+   formatflags are from the GLO_ constants */
+
 GloContext *glo_context_create(int formatFlags, GloContext *shareLists) {
-  if (!glo_inited)
-    glo_init();
+    if (!glo_inited)
+        glo_init();
 
-  GLXFBConfig          *fbConfigs;
-  int                   numReturned;
-  GloContext           *context;
-  int                   rgbaBits[4];
-  int                   bufferAttributes[] = {
-      GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
-      GLX_RENDER_TYPE,   GLX_RGBA_BIT,
-      GLX_RED_SIZE,      8,
-      GLX_GREEN_SIZE,    8,
-      GLX_BLUE_SIZE,     8,
-      GLX_ALPHA_SIZE,    8,
-      GLX_DEPTH_SIZE,    0,
-      GLX_STENCIL_SIZE,  0,
-      None
-  };
+    GLXFBConfig          *fbConfigs;
+    int                   numReturned;
+    GloContext           *context;
+    int                   rgbaBits[4];
+    int                   bufferAttributes[] = {
+        GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
+        GLX_RENDER_TYPE,   GLX_RGBA_BIT,
+        GLX_RED_SIZE,      8,
+        GLX_GREEN_SIZE,    8,
+        GLX_BLUE_SIZE,     8,
+        GLX_ALPHA_SIZE,    8,
+        GLX_DEPTH_SIZE,    0,
+        GLX_STENCIL_SIZE,  0,
+        None
+    };
 
-  if (!glo_inited)
-    glo_init();
+    if (!glo_inited)
+        glo_init();
 
-  // set up the surface format from the flags we were given
-  glo_flags_get_rgba_bits(formatFlags, rgbaBits);
-  bufferAttributes[5]  = rgbaBits[0];
-  bufferAttributes[7]  = rgbaBits[1];
-  bufferAttributes[9]  = rgbaBits[2];
-  bufferAttributes[11] = rgbaBits[3];
-  bufferAttributes[13] = glo_flags_get_depth_bits(formatFlags);
-  bufferAttributes[15] = glo_flags_get_stencil_bits(formatFlags);
+    // set up the surface format from the flags we were given
+    glo_flags_get_rgba_bits(formatFlags, rgbaBits);
+    bufferAttributes[5]  = rgbaBits[0];
+    bufferAttributes[7]  = rgbaBits[1];
+    bufferAttributes[9]  = rgbaBits[2];
+    bufferAttributes[11] = rgbaBits[3];
+    bufferAttributes[13] = glo_flags_get_depth_bits(formatFlags);
+    bufferAttributes[15] = glo_flags_get_stencil_bits(formatFlags);
 
-  fbConfigs = glXChooseFBConfig( glo.dpy, DefaultScreen(glo.dpy),
-                                 bufferAttributes, &numReturned );
-  if (numReturned==0) {
-      printf( "No matching configs found.\n" );
-      exit( EXIT_FAILURE );
-  }
-  context = (GloContext*)qemu_malloc(sizeof(GloContext));
-  memset(context, 0, sizeof(GloContext));
-  context->formatFlags = formatFlags;
-  context->fbConfig = fbConfigs[0];
+    fbConfigs = glXChooseFBConfig( glo.dpy, DefaultScreen(glo.dpy),
+                                   bufferAttributes, &numReturned );
+    if (numReturned==0) {
+        printf( "No matching configs found.\n" );
+        exit( EXIT_FAILURE );
+    }
+    context = (GloContext*)qemu_malloc(sizeof(GloContext));
+    memset(context, 0, sizeof(GloContext));
+    context->formatFlags = formatFlags;
+    context->fbConfig = fbConfigs[0];
 
-  /* Create a GLX context for OpenGL rendering */
-  context->context = glXCreateNewContext(glo.dpy, context->fbConfig,
+    /* Create a GLX context for OpenGL rendering */
+    context->context = glXCreateNewContext(glo.dpy, context->fbConfig,
                                          GLX_RGBA_TYPE,
                                          shareLists ? shareLists->context: NULL,
                                          True );
 
-  if (!context->context) {
-    printf( "glXCreateNewContext failed\n" );
-    exit( EXIT_FAILURE );
-  }
+    if (!context->context) {
+        printf( "glXCreateNewContext failed\n" );
+        exit( EXIT_FAILURE );
+    }
 
-  return context;
+    return context;
 }
 
 /* Destroy a previously created OpenGL context */
 void glo_context_destroy(GloContext *context) {
-  if (!context) return;
+    if (!context) return;
 
-  // TODO: check for GloSurfaces using this?
-  glXDestroyContext( glo.dpy, context->context);
-  qemu_free(context);
+    // TODO: check for GloSurfaces using this?
+    glXDestroyContext( glo.dpy, context->context);
+    qemu_free(context);
 }
 
 static void glo_surface_free_xshm_image(GloSurface *surface) {
-      XShmDetach(glo.dpy, &surface->shminfo);
-      surface->image->data = NULL;
-      XDestroyImage(surface->image);
-      shmdt(surface->shminfo.shmaddr);
-      shmctl(surface->shminfo.shmid, IPC_RMID, NULL);
+    XShmDetach(glo.dpy, &surface->shminfo);
+    surface->image->data = NULL;
+    XDestroyImage(surface->image);
+    shmdt(surface->shminfo.shmaddr);
+    shmctl(surface->shminfo.shmid, IPC_RMID, NULL);
 }
 
 //FIXMEIM - handle failure to allocate.
 static void glo_surface_try_alloc_xshm_image(GloSurface *surface) {
 
     if(surface->image)
-      glo_surface_free_xshm_image(surface);
+        glo_surface_free_xshm_image(surface);
 
     surface->image =
-      XShmCreateImage(glo.dpy, DefaultVisual(glo.dpy, 0), 24, ZPixmap, NULL,
-                      &surface->shminfo, surface->width, surface->height);
+        XShmCreateImage(glo.dpy, DefaultVisual(glo.dpy, 0), 24, ZPixmap, NULL,
+                        &surface->shminfo, surface->width, surface->height);
+
     surface->shminfo.shmid = shmget(IPC_PRIVATE,
                                     surface->image->bytes_per_line *
-                                                           surface->height,
+                                    surface->height,
                                     IPC_CREAT | 0777);
     surface->shminfo.shmaddr = shmat(surface->shminfo.shmid, NULL, 0);
     surface->image->data = surface->shminfo.shmaddr;
@@ -217,7 +225,8 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     unsigned long mask;
     XVisualInfo *vis;
 
-    if (!context) return 0;
+    if (!context)
+      return 0;
 
     surface = (GloSurface*)qemu_malloc(sizeof(GloSurface));
     memset(surface, 0, sizeof(GloSurface));
@@ -229,34 +238,32 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
 
     attr.background_pixel = 0xff000000;
     attr.border_pixel = 0;
-    attr.colormap = XCreateColormap(glo.dpy, DefaultRootWindow(glo.dpy), vis->visual, AllocNone);
-    attr.event_mask = 0; /* StructureNotifyMask | ExposureMask | KeyPressMask */
+    attr.colormap = XCreateColormap(glo.dpy, DefaultRootWindow(glo.dpy),
+                                    vis->visual, AllocNone);
+    attr.event_mask = 0;
     attr.save_under = True;
     attr.override_redirect = True;
     attr.cursor = None;
-    mask =
-        CWBackPixel | CWBorderPixel | CWColormap | CWEventMask |
-        CWOverrideRedirect | CWSaveUnder;
+    mask = CWBackPixel | CWBorderPixel | CWColormap | CWEventMask |
+           CWOverrideRedirect | CWSaveUnder;
 
     surface->window = XCreateWindow(glo.dpy, DefaultRootWindow(glo.dpy), -width-1000, 0, width, height, 0, vis->depth, InputOutput, vis->visual, mask, &attr);
 
     if (!surface->window) {
-      printf( "XCreateWindow failed\n" );
-      exit( EXIT_FAILURE );
+        printf( "XCreateWindow failed\n" );
+        exit( EXIT_FAILURE );
     }
 
-XMapWindow(glo.dpy, surface->window);
-
+    XMapWindow(glo.dpy, surface->window);
     XCompositeRedirectWindow (glo.dpy, surface->window, CompositeRedirectAutomatic);
 
     if(glo.use_ximage)
         surface->pixmap = XCompositeNameWindowPixmap(glo.dpy, surface->window);
 
     if(surface->pixmap == 0) {
-        fprintf(stderr, "Shit!\n");
-        exit(1);
+        fprintf(stderr, "Failed to allocate pixmap!\n");
+        exit(EXIT_FAILURE);
     }
-
 
     XSync(glo.dpy, 0);
 
@@ -271,7 +278,7 @@ XMapWindow(glo.dpy, surface->window);
         sizehints.flags = USSize | USPosition;
         XSetWMNormalHints(glo.dpy, surface->window, &sizehints);
         XSetStandardProperties(glo.dpy, surface->window, "", "", None,
-                        (char **) NULL, 0, &sizehints);
+                               (char **) NULL, 0, &sizehints);
     }
 
     XSync(glo.dpy, 0);
@@ -289,7 +296,7 @@ void glo_surface_destroy(GloSurface *surface) {
         XFreePixmap( glo.dpy, surface->pixmap);
     XDestroyWindow( glo.dpy, surface->window);
     if(surface->image)
-      glo_surface_free_xshm_image(surface);
+        glo_surface_free_xshm_image(surface);
     qemu_free(surface);
 
 }
@@ -299,24 +306,16 @@ int glo_surface_makecurrent(GloSurface *surface) {
     int ret;
 
     if (!glo_inited)
-      glo_init();
+        glo_init();
 
     if (surface)
-      ret = glXMakeCurrent(glo.dpy, surface->window, surface->context->context);
+        ret = glXMakeCurrent(glo.dpy, surface->window,
+                             surface->context->context);
     else
-      ret = glXMakeCurrent(glo.dpy, 0, NULL);
+        ret = glXMakeCurrent(glo.dpy, 0, NULL);
 
     return ret;
 }
-
-/*
-#define geti(a) \
-   do { \
-      int b; \
-      glGetIntegerv(a, &b); \
-      fprintf(stderr, "%s: %d\n", #a, b); \
-   } while (0);
-*/
 
 /* Get the contents of the given surface */
 void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *data) {
@@ -324,71 +323,73 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
     XImage *img;
 
     if (!surface)
-      return;
+        return;
 
     if(glo.use_ximage) {
-      glXWaitGL();
+        glXWaitGL();
     
-      if(surface->image) {
-        XShmGetImage (glo.dpy, surface->pixmap, surface->image, 0, 0, AllPlanes);
-        img = surface->image;
-      }
-      else {
-        img = XGetImage(glo.dpy, surface->pixmap, 0, 0, surface->width, surface->height, AllPlanes, ZPixmap);
-      }
-
-      if (img) {
-        if(bpp != 32 && bpp != 24 && !once) {
-          fprintf(stderr, "Warning: unsupported colourdepth\n");
-          once = 1;
+        if(surface->image) {
+            XShmGetImage (glo.dpy, surface->pixmap, surface->image, 0, 0, AllPlanes);
+            img = surface->image;
+        }
+        else {
+            img = XGetImage(glo.dpy, surface->pixmap, 0, 0, surface->width, surface->height, AllPlanes, ZPixmap);
         }
 
-        if(bpp == img->bits_per_pixel && stride == img->bytes_per_line)
-        {
-          memcpy(data, img->data, stride * surface->height);
-        }
-        else
-        {
-          int x, y;
-          for(y = 0 ; y < surface->height ; y++) {
-            for(x = 0 ; x < surface->width ; x++) {
-              char *src = ((char*)img->data) + (x*(img->bits_per_pixel/8)) + (y*img->bytes_per_line);
-              char *dst = ((char*)data) + x*(bpp/8) + (y*stride);
-              dst[0] = src[0];
-              dst[1] = src[1];
-              dst[2] = src[2];
-              if(bpp == 32)
-                dst[3] = 0xff; // if guest is 32 bit and host is 24
+        if (img) {
+            if(bpp != 32 && bpp != 24 && !once) {
+                fprintf(stderr, "Warning: unsupported colourdepth\n");
+                once = 1;
             }
-          }
-        }
+
+            if(bpp == img->bits_per_pixel && stride == img->bytes_per_line)
+            {
+                 memcpy(data, img->data, stride * surface->height);
+            }
+            else
+            {
+                int x, y;
+                for(y = 0 ; y < surface->height ; y++) {
+                    for(x = 0 ; x < surface->width ; x++) {
+                        char *src = ((char*)img->data) +
+                                    (x*(img->bits_per_pixel/8)) +
+                                    (y*img->bytes_per_line);
+                        char *dst = ((char*)data) + x*(bpp/8) + (y*stride);
+                        dst[0] = src[0];
+                        dst[1] = src[1];
+                        dst[2] = src[2];
+                        if(bpp == 32)
+                              dst[3] = 0xff; // if guest is 32 bit and host is 24
+                    }
+                }
+            }
   
-       // If we're not using Shm
-       if(!surface->image)
-         XDestroyImage(img);
+            // If we're not using Shm
+            if(!surface->image)
+                XDestroyImage(img);
 
-       return;  // We're done.
-     } 
-     // Uh oh... better fallback. Perhaps get glo.use_ximage to 0?
-   }
+            return;  // We're done.
+        } 
+    // Uh oh... better fallback. Perhaps get glo.use_ximage to 0?
+    }
 
-   // Compatible / fallback method.
-   glo_surface_getcontents_readpixels(surface->context->formatFlags,
-                                         stride, bpp, surface->width,
-                                         surface->height, data);
+    // Compatible / fallback method.
+    glo_surface_getcontents_readpixels(surface->context->formatFlags,
+                                       stride, bpp, surface->width,
+                                       surface->height, data);
 }
 
 /* Return the width and height of the given surface */
 void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
     if (width)
-      *width = surface->width;
+        *width = surface->width;
     if (height)
-      *height = surface->height;
+        *height = surface->height;
 }
 
 /* Abstract glXQueryExtensionString() */
 const char *glo_glXQueryExtensionsString(void) {
-  return glXQueryExtensionsString(glo.dpy, 0);
+    return glXQueryExtensionsString(glo.dpy, 0);
 }
 
 
@@ -424,15 +425,14 @@ static int glo_can_readback(void) {
 
     p = datain;
     for (y=0;y<TY;y++) {
-      for (x=0;x<TX;x++) {
-        p[0] = x;
-        p[1] = y;
-        //if (y&1) { p[0]=0; p[1]=0; }
-        if (bpp>2) p[2] = 0;
-        if (bpp>3) p[3] = 0xFF;
-        p+=bpp;
-      }
-      memcpy(&datain_flip[((TY-1)-y)*bpp*TX], &datain[y*bpp*TX], bpp*TX);
+        for (x=0;x<TX;x++) {
+            p[0] = x;
+            p[1] = y;
+            if (bpp>2) p[2] = 0;
+            if (bpp>3) p[3] = 0xFF;
+            p+=bpp;
+        }
+        memcpy(&datain_flip[((TY-1)-y)*bpp*TX], &datain[y*bpp*TX], bpp*TX);
     }
 
     context = glo_context_create(bufferFlags, 0);
@@ -467,7 +467,7 @@ static int glo_can_readback(void) {
 static void glo_test_readback_methods(void) {
     glo.use_ximage = 1;
     if(!glo_can_readback())
-      glo.use_ximage = 0;
+        glo.use_ximage = 0;
 
     fprintf(stderr, "VM GL: Using %s readback\n", glo.use_ximage?"XImage":"glReadPixels");
 }
