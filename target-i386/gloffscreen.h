@@ -1,7 +1,7 @@
 /*
  *  Offscreen OpenGL abstraction layer
  *
- *  Copyright (c) 2010 Intel
+ *  Copyright (c) 2010 Intel Corporation
  *  Written by: 
  *    Gordon Williams <gordon.williams@collabora.co.uk>
  *    Ian Molton <ian.molton@collabora.co.uk>

@@ -2,8 +2,8 @@
  *  Host-side implementation of GL/GLX API
  *
  *  Copyright (c) 2006,2007 Even Rouault
- *  Copyright (c) 2010 Intel
- *  Written by: 
+ *
+ *  modified by:
  *    Gordon Williams <gordon.williams@collabora.co.uk>
  *    Ian Molton <ian.molton@collabora.co.uk>
  *
