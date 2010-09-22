@@ -47,7 +47,6 @@ void qemu_free(void *ptr);
 struct GloMain {
   Display *dpy;
   int use_ximage;
-  GloSurface *curr_surface;
 };
 struct GloMain glo;
 int glo_inited = 0;
@@ -302,13 +301,10 @@ int glo_surface_makecurrent(GloSurface *surface) {
     if (!glo_inited)
       glo_init();
 
-    if (surface) {
+    if (surface)
       ret = glXMakeCurrent(glo.dpy, surface->window, surface->context->context);
-      glo.curr_surface = surface;
-    } else {
-      glo.curr_surface = NULL;
+    else
       ret = glXMakeCurrent(glo.dpy, 0, NULL);
-    }
 
     return ret;
 }
