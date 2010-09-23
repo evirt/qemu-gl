@@ -194,6 +194,10 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
     return 1;
 }
 
+#define GLINIT_FAIL_ABI 3
+#define GLINIT_QUEUE 2
+#define GLINIT_NOQUEUE 1
+
 int decode_call_int(ProcessStruct *process, char *in_args, int args_len, char *r_buffer)
 {
     static ProcessStruct *cur_process = NULL;
@@ -212,8 +216,16 @@ int decode_call_int(ProcessStruct *process, char *in_args, int args_len, char *r
 
     if(unlikely(first_func == _init32_func || first_func == _init64_func)) {
         if(!cur_process->wordsize) {
+            int *version = (int*)(in_args+2);
             cur_process->wordsize = first_func == _init32_func?4:8;
-            *(int*)r_buffer = 2; // Indicate that we can buffer commands
+
+            if(version[0] != 1)
+                *(int*)r_buffer = GLINIT_FAIL_ABI; // ABI check FAIL
+            else if(version[1] != 0)
+                *(int*)r_buffer = GLINIT_FAIL_ABI; // ABI check FAIL
+            else
+                *(int*)r_buffer = GLINIT_QUEUE; // Indicate that we can buffer commands
+
             return 1; // Initialisation done
         }
         else {
