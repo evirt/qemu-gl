@@ -139,6 +139,7 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
                     }
 
                     argptr += 4;
+                    args_size = 0;
                     break;
                 } 
 
@@ -221,7 +222,7 @@ int decode_call_int(ProcessStruct *process, char *in_args, int args_len, char *r
 
             if(version[0] != 1)
                 *(int*)r_buffer = GLINIT_FAIL_ABI; // ABI check FAIL
-            else if(version[1] != 0)
+            else if(version[1] != 1)
                 *(int*)r_buffer = GLINIT_FAIL_ABI; // ABI check FAIL
             else
                 *(int*)r_buffer = GLINIT_QUEUE; // Indicate that we can buffer commands
