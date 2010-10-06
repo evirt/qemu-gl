@@ -244,5 +244,8 @@ int decode_call_int(ProcessStruct *process, char *in_args, int args_len, char *r
         ret = do_decode_call_int(cur_process, in_args, args_len, r_buffer);
     }
 
+    if(!ret)
+        cur_process = NULL;
+
     return ret;
 }

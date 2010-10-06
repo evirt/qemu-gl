@@ -166,7 +166,7 @@ process = vmgl_get_process(hdr->pid);
             if(remain <= 0) {
                 qemu_free(process->rrq);
                 if(!nkill)
-                    disconnect(process);
+                    gl_disconnect(process);
             }
        }
 done:

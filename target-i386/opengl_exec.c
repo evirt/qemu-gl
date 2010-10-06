@@ -898,7 +898,7 @@ GLState *get_glstate_for_fake_ctxt(ProcessState *process, int fake_ctxt)
     return 0;
 }
 
-void disconnect(ProcessState *process)
+void gl_disconnect(ProcessState *process)
 {
     int i;
     for (i = 0; i < process->nb_states; i++) {

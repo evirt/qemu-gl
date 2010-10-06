@@ -27,7 +27,7 @@
 
 #include <sys/types.h>
 
-extern void disconnect(ProcessStruct *process);
+extern void gl_disconnect(ProcessStruct *process);
 extern ProcessStruct *vmgl_get_process(pid_t pid);
 extern void vmgl_context_switch(ProcessStruct *process, int switch_gl_context);
 extern int do_function_call(ProcessStruct *process, int func_number,
