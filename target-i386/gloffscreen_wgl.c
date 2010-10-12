@@ -786,9 +786,4 @@ void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
         *height = surface->height;
 }
 
-/* Fake glXQueryExtensionsString() */
-const char *glo_glXQueryExtensionsString(void) {
-    return "";
-}
-
 #endif

@@ -68,7 +68,7 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
         argptr += 2;
 
         if(func_number >= GL_N_CALLS) {
-            fprintf(stderr, "Bad function number or corrupt command queue\n");
+            DEBUGF("Bad function number or corrupt command queue\n");
             return 0;
         }
 
