@@ -1462,6 +1462,14 @@ static void pc_init1(ram_addr_t ram_size,
             }
         }
     }
+
+//#ifdef CONFIG_GL
+    /* Add virtio-gl-pci device */
+    // TODO: do not know the devaddr, just use the wrong value to make it compile. Seems to work
+    pci_dev = pci_create("virtio-gl-pci", virtio_balloon_devaddr);
+    qdev_init(&pci_dev->qdev);
+    //pci_create_simple(pci_bus, -1, "virtio-gl-pci");
+//#endif
 }
 
 static void pc_init_pci(ram_addr_t ram_size,

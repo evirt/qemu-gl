@@ -39,6 +39,7 @@
 /* XXX: This may be wrong for 64-bit ILP32 hosts.  */
 typedef void * host_reg_t;
 
+#ifndef _STDIO_H
 #ifdef HOST_BSD
 typedef struct __sFILE FILE;
 #else
@@ -47,6 +48,7 @@ typedef struct FILE FILE;
 extern int fprintf(FILE *, const char *, ...);
 extern int fputs(const char *, FILE *);
 extern int printf(const char *, ...);
+#endif
 #undef NULL
 #define NULL 0
 

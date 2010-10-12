@@ -17,6 +17,8 @@
 #include "hw.h"
 #include "qdev.h"
 
+#define VIRTIO_ID_GL 6
+
 /* from Linux's linux/virtio_config.h */
 
 /* Status byte for guest to report progress, and synchronize features. */
@@ -159,6 +161,7 @@ void virtio_update_irq(VirtIODevice *vdev);
 
 void virtio_bind_device(VirtIODevice *vdev, const VirtIOBindings *binding,
                         void *opaque);
+VirtIODevice *virtio_gl_init(DeviceState *dev);
 
 /* Base devices.  */
 VirtIODevice *virtio_blk_init(DeviceState *dev);

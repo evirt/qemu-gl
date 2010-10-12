@@ -518,6 +518,22 @@ static void virtio_balloon_init_pci(PCIDevice *pci_dev)
                     0x00);
 }
 
+//#ifdef CONFIG_GL
+static void virtio_gl_init_pci(PCIDevice *pci_dev)
+{
+    VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
+    VirtIODevice *vdev;
+
+    vdev = virtio_gl_init(&pci_dev->qdev);
+    virtio_init_pci(proxy, vdev,
+                    PCI_VENDOR_ID_REDHAT_QUMRANET,
+                    PCI_DEVICE_ID_VIRTIO_GL,
+                    PCI_CLASS_OTHERS,
+                    0x00);
+
+}
+//#endif
+
 static PCIDeviceInfo virtio_info[] = {
     {
         .qdev.name = "virtio-blk-pci",
@@ -570,6 +586,12 @@ static PCIDeviceInfo virtio_info[] = {
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_console_init_pci_0_10,
     },{
+//#ifdef CONFIG_GL
+        .qdev.name = "virtio-gl-pci",
+        .qdev.size = sizeof(VirtIOPCIProxy),
+        .init      = virtio_gl_init_pci,
+    },{
+//#endif
         /* end of list */
     }
 };

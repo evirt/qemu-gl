@@ -4427,6 +4427,7 @@ typedef struct QEMUOption {
     int index;
 } QEMUOption;
 
+
 static const QEMUOption qemu_options[] = {
     { "h", 0, QEMU_OPTION_h },
 #define DEF(option, opt_arg, opt_enum, opt_help)        \
