@@ -80,6 +80,7 @@ static void sdl_update(DisplayState *ds, int x, int y, int w, int h)
     rec.w = w;
     rec.h = h;
 
+#ifdef CONFIG_SKINNING
     if (es_ds) {
         rec_gs.x = es_posx;
         rec_gs.y = es_posy;
@@ -97,6 +98,7 @@ static void sdl_update(DisplayState *ds, int x, int y, int w, int h)
             SDL_BlitSurface(emulator_screen, &rec_es, guest_screen, &rec_gs);
         }
     }
+#endif
     
     if (guest_screen) {
         if (!scaling_active) {
