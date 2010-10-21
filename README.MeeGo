@@ -1,0 +1,27 @@
+README of MeeGo emulator
+
+1. Build the MeeGo emulator source
+
+   a. Configure to enable Hardware passthrough GL acceleration & enable Skin support in QEMU
+   # ./configure --target-list=i386-softmmu --enable-gl --enable-skinning
+
+   b. Build source code & install
+   # make
+   # make install
+
+   The MeeGo emulator will be installed into /usr/share/qemugl by default, the program of QEMU is qemugl
+
+2. Run MeeGo emulator
+
+   a. Run emulator without Skin & touchscreen
+   # qemugl -m 1024 -boot c -hda <handset_raw_image> \
+            -net user,hostfwd=tcp:127.0.0.1:6666-:22 -net nic,model=e1000 \
+            -enable-kvm -vga std -enable-gl -device virtio-gl-pci \
+            -skin /usr/share/qemul/meego/skin/handset/skin.xml \
+            -usbdevice tablet
+
+   b. Change the skin of device
+   MeeGo emulator support handset general device, aava device with skin & netbook w/o skin. 
+   You can choose the different skin by:
+   aava device: -skin /usr/share/qemul/meego/skin/aava/skin.xml
+   general handset device: -skin /usr/share/qemul/meego/skin/handset/skin.xml

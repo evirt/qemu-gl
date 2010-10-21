@@ -301,6 +301,8 @@ void adb_kbd_init(ADBBusState *bus)
 {
     ADBDevice *d;
     KBDState *s;
+
+    printf("adb_kbd_init: enter\n");
     s = qemu_mallocz(sizeof(KBDState));
     d = adb_register_device(bus, ADB_KEYBOARD, adb_kbd_request,
                             adb_kbd_reset, s);

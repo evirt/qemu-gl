@@ -34,6 +34,7 @@ static SkinButtonStateCallback *switchcb = NULL;
 
 int skin_button_handle_mouse(SkinKey* button, int mousebtn)
 {
+    // printf("skin_button_handle_mouse >> \n");
     button->event.mouseover = 1;
     if(button->isswitch) {
         int newstate = button->state;
@@ -112,6 +113,7 @@ int skin_button_handle_mouseleave(SkinKey* button)
 
 int skin_button_handle_key(SkinKey* button, int keypressed)
 {
+    // printf("skin_button_handle_key >>\n");
     int newstate = button->state;
     if(keypressed) {
         button->event.keydown = 1;
@@ -169,7 +171,6 @@ int skin_button_handle_key(SkinKey* button, int keypressed)
 
 void skin_button_checkswitch(SkinScreen* skin, SkinButton* button)
 {
-    //printf(">> skin_button_checkswitch\n");
     if (button->key.isswitch) {
         int hwstate = unknown;
         SkinButtonStateCallback *cb = switchcb;

@@ -180,11 +180,15 @@ int skin_activate_layout(SkinScreen* skin, int rotation)
     memcpy(&skin->bgcolor, &layout->bgcolor, sizeof(SkinBackgroundColor));
     if (layout->keyboard)
         skin->keyboard.animated = layout->keyboard->animated;
-    
+
+    //printf("skin_activate_layout: layout->emuscreen_posx:%d, layout->emuscreen_posy:%d, layout->emuscreen_width:%d, layout->emuscreen_height:%d\n",
+    //      layout->emuscreen_posx, layout->emuscreen_posy, layout->emuscreen_width, layout->emuscreen_height);
+    //printf("skin_activate_layout: layout->width:%d, layout->height:%d\n", layout->width, layout->height);
     skin->es->posx = layout->emuscreen_posx;
     skin->es->posy = layout->emuscreen_posy;
     skin->es->width = layout->emuscreen_width;
-    skin->es->height = layout->emuscreen_width;
+    //skin->es->height = layout->emuscreen_width; /* Need to be fixed? */
+    skin->es->height = layout->emuscreen_height;
     
     // Store pointers to obsolete data    
     SkinImage*  curr_background = skin->background;

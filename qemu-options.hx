@@ -565,6 +565,19 @@ STEXI
 @item -skin @var{file}
 Skin qemu using definitions from @var{file}
 ETEXI
+
+DEF("mode", HAS_ARG, QEMU_OPTION_mode,
+    "-mode [portrait|landscape]      Display skin as the specified mode\n")
+STEXI
+@item -mode @var{type}
+Qemu using display mode @var{type}
+@table @option
+@item portrait
+Show skin as portrait mode
+@item landscape
+Show skin as landscape mode
+ETEXI
+
 #endif
 
 #if defined(TARGET_PPC) || defined(TARGET_SPARC)

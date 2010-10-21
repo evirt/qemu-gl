@@ -26,6 +26,15 @@ typedef struct QEMUPutMouseEntry {
     struct QEMUPutMouseEntry *next;
 } QEMUPutMouseEntry;
 
+/* support mutiple kbd */
+typedef struct QEMUPutKBDEntry {
+    QEMUPutKBDEvent *put_kbd_event;
+    void *opaque;
+
+    /* used internally by qemu for handling keyboards */
+    QTAILQ_ENTRY(QEMUPutKBDEntry) next;
+} QEMUPutKBDEntry;
+
 void qemu_add_kbd_event_handler(QEMUPutKBDEvent *func, void *opaque);
 QEMUPutMouseEntry *qemu_add_mouse_event_handler(QEMUPutMouseEvent *func,
                                                 void *opaque, int absolute,

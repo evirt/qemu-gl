@@ -1,0 +1,14 @@
+<root>
+    <landscape>
+        <skin width="1246" height="615"/>
+        <bgcolor red="255" blue="255" green="255"/>
+        <background image="background.png" posx="0" posy="4"/>
+        <screen width="864" height="480" posx="181" posy="61"/>
+    </landscape>
+    <portrait>
+        <skin width="615" height="1246"/>
+        <bgcolor red="255" blue="255" green="255"/>
+        <background image="background_p.png" posx="0" posy="4"/>
+        <screen width="864" height="480" posx="69" posy="185"/>
+    </portrait>
+</root>

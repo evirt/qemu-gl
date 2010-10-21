@@ -273,6 +273,7 @@ static void *boot_set_opaque;
 #ifdef CONFIG_SKINNING
 int skinning_init(char* skin_file, int portrait, int rctport);
 const char *skin_file = NULL;
+const char *display_mode = NULL;
 int rctport = 0;
 #endif /* CONFIG_SKINNING */
 
@@ -390,6 +391,9 @@ static void *qemu_put_kbd_event_opaque;
 static QEMUPutMouseEntry *qemu_put_mouse_event_head;
 static QEMUPutMouseEntry *qemu_put_mouse_event_current;
 
+static QTAILQ_HEAD(, QEMUPutKBDEntry) kbd_handlers =
+    QTAILQ_HEAD_INITIALIZER(kbd_handlers);
+
 #ifdef CONFIG_SKINNING
 QEMUPutMouseEntry *original_qemu_add_mouse_event_handler(QEMUPutMouseEvent *func,
                                                          void *opaque, int absolute,
@@ -398,10 +402,19 @@ QEMUPutMouseEntry *original_qemu_add_mouse_event_handler(QEMUPutMouseEvent *func
 #define qemu_add_mouse_event_handler original_qemu_add_mouse_event_handler
 #endif 
 
+/* jun: port to support mutiple kbd */
 void qemu_add_kbd_event_handler(QEMUPutKBDEvent *func, void *opaque)
 {
-    qemu_put_kbd_event_opaque = opaque;
-    qemu_put_kbd_event = func;
+    QEMUPutKBDEntry *s;
+
+    if (func != NULL) {
+        s = qemu_mallocz(sizeof(QEMUPutKBDEntry));
+
+        s->put_kbd_event = func;
+        s->opaque = opaque;
+
+        QTAILQ_INSERT_TAIL(&kbd_handlers, s, next);
+    }
 }
 
 QEMUPutMouseEntry *qemu_add_mouse_event_handler(QEMUPutMouseEvent *func,
@@ -468,8 +481,10 @@ void qemu_remove_mouse_event_handler(QEMUPutMouseEntry *entry)
 
 void kbd_put_keycode(int keycode)
 {
-    if (qemu_put_kbd_event) {
-        qemu_put_kbd_event(qemu_put_kbd_event_opaque, keycode);
+    //printf("kbd_pub_keycode, keycode:%d\n", keycode);    
+    QEMUPutKBDEntry *cursor;
+    QTAILQ_FOREACH(cursor, &kbd_handlers, next) {
+        cursor->put_kbd_event(cursor->opaque, keycode);
     }
 }
 
@@ -488,14 +503,18 @@ void kbd_mouse_event(int dx, int dy, int dz, int buttons_state)
     mouse_event_opaque =
         qemu_put_mouse_event_current->qemu_put_mouse_event_opaque;
 
+    //printf("kbd_mouse_event, 0, graphic_rotate:%d\n", graphic_rotate);    
     if (mouse_event) {
         if (graphic_rotate) {
+#ifndef CONFIG_SKINNING            
+            //printf("kbd_mouse_event, 1, graphic_rotate:%d\n", graphic_rotate);
             if (qemu_put_mouse_event_current->qemu_put_mouse_event_absolute)
                 width = 0x7fff;
             else
                 width = graphic_width - 1;
             mouse_event(mouse_event_opaque,
                                  width - dy, dx, dz, buttons_state);
+#endif
         } else
             mouse_event(mouse_event_opaque,
                                  dx, dy, dz, buttons_state);
@@ -562,7 +581,7 @@ void do_info_mice(Monitor *mon, QObject **ret_data)
     if (!qemu_put_mouse_event_head) {
         goto out;
     }
-
+ 
     cursor = qemu_put_mouse_event_head;
     while (cursor != NULL) {
         QObject *obj;
@@ -5426,7 +5445,14 @@ int main(int argc, char **argv, char **envp)
 #ifdef CONFIG_SKINNING
             case QEMU_OPTION_skin:
                 skin_file = optarg;
-                //printf("skin_file: %s\n", skin_file);
+                break;
+            case QEMU_OPTION_mode:
+                display_mode = optarg;
+                if (!strcmp(display_mode, "portrait")) {
+                    graphic_rotate = 1;
+                } else {
+                    graphic_rotate = 0;
+                }
                 break;
             case QEMU_OPTION_rctport:
             {

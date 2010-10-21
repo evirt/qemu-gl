@@ -590,6 +590,7 @@ void *ps2_kbd_init(void (*update_irq)(void *, int), void *update_arg)
 {
     PS2KbdState *s = (PS2KbdState *)qemu_mallocz(sizeof(PS2KbdState));
 
+    //printf("ps2_kbd_init >>\n");
     s->common.update_irq = update_irq;
     s->common.update_arg = update_arg;
     s->scancode_set = 2;

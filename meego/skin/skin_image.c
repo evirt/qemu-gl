@@ -137,6 +137,7 @@ SkinImage* skin_image_createtext(SkinScreen* skin, char* text)
 
 void skin_rotate_buffer(SkinScreen* skin, DisplayState* ds, int x, int y, int w, int h)
 {
+    //printf(">> skin_rotate_buffer: rotate buffer\n");
     switch (ds_get_bytes_per_pixel(ds)) {
         case 2:
             skin_rotate_buffer_bytes_2(skin, ds, x, y, w, h);

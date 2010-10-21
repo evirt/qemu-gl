@@ -33,7 +33,7 @@ static QEMUTimer *keyboard_timer = NULL;
 static int keyboard_animation_phase = 0;
 #define ANIM_NOT_USED 13 // Defined instead of const int because of case-usage
 static int no_keyboard_anim = 0;
-const int ZOOM_STEP = 10;
+const int ZOOM_STEP = 3;
 const int ZOOM_INDICATOR_POS = 26;
 const int ZOOM_MIN_FACTOR = 50;
 const int ZOOM_MAX_FACTOR = 130;
@@ -41,10 +41,12 @@ static int zoom_factor = 100;
 static int first_keyboard_check = 1;
 static int startup = 1;
 static int rct_sock = -1;
+//static int booted = 1;
 
 // #jun:hacking
 DisplayState *es_ds = NULL;
 int es_posx, es_posy;
+int rotation;
 
 // Local prototypes
 static void setup_keyboard_animation_timer(void);
@@ -70,6 +72,7 @@ void original_qemu_console_resize(DisplayState *ds, int width, int height);
 
 static void skin_handle_rotation(void)
 {
+    // printf("skin_handle_rotation >> \n");
     if (skin->rotation != skin->rotation_req) {
         skin_cleartooltip(NULL);
         skin->rotation = skin->rotation_req;
@@ -102,15 +105,19 @@ static void skin_handle_rotation(void)
             skin_handle_zooming();
         }
         if (skin->rotation) {
+            /*
             kbd_put_keycode(0x4f); // x -= axis_max
             kbd_put_keycode(0x4c); // y += axis_max
             kbd_put_keycode(0x4f | 0x80);
             kbd_put_keycode(0x4c | 0x80);
+            */
         } else {
+            /*
             kbd_put_keycode(0x50); // x += axis_max
             kbd_put_keycode(0x4b); // y -= axis_max
             kbd_put_keycode(0x50 | 0x80);
-            kbd_put_keycode(0x4b | 0x80);
+            kbd_put_keycode(0x4b | 0x80);            
+            */
         }
     }
 }
@@ -204,29 +211,30 @@ static void skin_handle_tooltip_timeout(void *opaque)
 static void skin_mouse_event(void *opaque,
                              int x, int y, int z, int buttons_state)
 {
-    if (!is_graphic_console()) return;
+    //printf("skin_mouse_event >>\n");
+    if (!is_graphic_console()) return;    
 
     static int in_screen = 0;
 
     skin->mouse_event = on;
     // Mouse position mx/my in range 0-32767, equals pixel 0 to width/height-1
     // actual mouse x and y on the application
-    int mx = x;
-    int my = y;
+    int mx = x * 100 / zoom_factor;
+    int my = y * 100 / zoom_factor;
     x = (mx - skin->es->posx) * 0x7FFF / ds_get_width(skin->es->ds);
     y = (my - skin->es->posy) * 0x7FFF / ds_get_height(skin->es->ds);
 
-//    printf("skin_mouse_event:  %d, %d btn: %d (w:%d, h:%d)\n", x, y, buttons_state,
-//                    ds_get_width(skin->ds), ds_get_height(skin->ds));
     QEMUPutMouseEntry *child = (QEMUPutMouseEntry *)opaque;
-//    printf("skin_mouse_event: mx:%d, my:%d, posx:%d, posy:%d, relw: %d, relh: %d, w:%d, h:%d\n", mx, my, skin->es->posx, skin->es->posy, ds_get_width(skin->es->ds), ds_get_height(skin->es->ds), skin->es->width, skin->es->height);
+
+    //printf("skin_mouse_event: mx:%d, my:%d, posx:%d, posy:%d, relw: %d, relh: %d\n",
+    //       mx, my, skin->es->posx, skin->es->posy, ds_get_width(skin->es->ds), ds_get_height(skin->es->ds));
+
     if (skin->rotation == off) {
         if (mx > skin->es->posx &&
             mx < skin->es->posx + ds_get_width(skin->es->ds) /*skin->es->width*/ &&
             my > skin->es->posy &&
             my < skin->es->posy + ds_get_height(skin->es->ds) /*skin->es->height*/ ) {
-//            printf("skin_mouse_event: report x: %d, y: %d\n", mx - skin->es->posx, my - skin->es->posy);
-
+            // printf("skin_mouse_event: report x: %d, y: %d\n", mx - skin->es->posx, my - skin->es->posy);
             if (!in_screen) {
                 in_screen = 1;
                 SDL_ShowCursor(0);
@@ -251,11 +259,23 @@ static void skin_mouse_event(void *opaque,
             my > skin->es->posy &&
             my < skin->es->posy + skin->es->width ) {
 
+            if (!in_screen) {
+                in_screen = 1;
+                SDL_ShowCursor(0);
+                // testing code, delete later !!!
+            }
+            
+            //child->qemu_put_mouse_event( child->qemu_put_mouse_event_opaque,
+            //                           y, -x, z, buttons_state);
             child->qemu_put_mouse_event( child->qemu_put_mouse_event_opaque,
-                                         y, -x, z, buttons_state);
-            SDL_ShowCursor(0);
+                                         (my - skin->es->posy) * 0x7FFF / (skin->es->width - 1),
+                                         ((skin->es->posx + skin->es->height) - mx) * 0x7FFF / (skin->es->height - 1),
+                                         z, buttons_state);       
         } else {
-            SDL_ShowCursor(1);
+            if (in_screen) {
+                in_screen = 0;
+                SDL_ShowCursor(1);
+            }
         }
     }
     
@@ -651,6 +671,7 @@ static void skin_host_setdata(DisplayState *ds)
 
 static void skin_host_resize(DisplayState *ds)
 {
+    // printf("skin_host_resize, zoom_factor:%d\n", zoom_factor);    
     if (!is_graphic_console()) return;
     if (startup) {
         int width = 0, height = 0;
@@ -658,7 +679,6 @@ static void skin_host_resize(DisplayState *ds)
         //printf("%s, dpy_getresolution: width=%d, height=%d, skin->width=%d, skin->height=%d\n", __FUNCTION__, width, height, skin->width, skin->height);
         if (width != 0 && height != 0) {
             startup = 0;
-#if 0
             if (skin->width >= width ||
                 skin->height >= height ) {
                 // Determine zoom level
@@ -668,7 +688,6 @@ static void skin_host_resize(DisplayState *ds)
                     zoom_factor -= ZOOM_STEP;
                 skin_handle_zooming();
             }
-#endif
         }
     }
     SkinArea area = { 0, 0, ds_get_width(skin->ds), ds_get_height(skin->ds) };
@@ -690,6 +709,9 @@ static void skin_update(DisplayState *ds, int x, int y, int w, int h)
     // Updates done by emulated screen need to be converted to our display
     int xd = x, yd = y, wd = w, hd = h;
     if (skin->rotation == off) {
+        rotation = 0;
+        es_posx = skin->es->posx;
+        es_posy = skin->es->posy;        
         // Check if the drawing will fit the screen
         if (ds_get_width(skin->ds) >= (w + (x + skin->es->posx)) &&
             ds_get_height(skin->ds) >= (h + (y + skin->es->posy)) ) {
@@ -698,13 +720,24 @@ static void skin_update(DisplayState *ds, int x, int y, int w, int h)
         }
     }
     else {
+        rotation = 1;        
+        es_posx = skin->es->posx;
+        es_posy = skin->es->posy;
+        
         skin_rotate_buffer(skin, ds, x, y, w, h);
+        // printf("skin_update: skin->es->posx:%d, skin->es->posy:%d, skin->es->height:%d, skin->es->width:%d, x:%d, y:%d, h:%d, w:%d\n",
+        // skin->es->posx, skin->es->posy, skin->es->height, skin->es->width, x, y, h, w);
         xd = skin->es->posx + skin->es->height - (y + h - 1);
         yd = skin->es->posy + x;
         wd = h;
         hd = w;
     }
+
+    // Update the correct part
+    dpy_update(skin->ds, xd, yd, wd, hd);
+
     // Check if we have an overlapping tooltip
+    #if 0
     if (skin->tooltip.image) {
         struct SkinArea clip = { xd, yd, wd, hd };
         if (skin_overlaps(skin->tooltip.image, &clip)) {
@@ -712,15 +745,11 @@ static void skin_update(DisplayState *ds, int x, int y, int w, int h)
             skin_draw_tooltip(&drawclip);
         }
     }
-    // Update the correct part
-    dpy_update(skin->ds, xd, yd, wd, hd);
+    #endif
 }
 
 static void skin_setdata(DisplayState *ds)
 {
-    //printf("skin_setdata()\n");
-    //if (skin->es && skin->es->ds)
-    //  dpy_setdata(skin->es->ds);
     if (!es_ds) es_ds = ds;
     dpy_setdata(skin->ds);
 }
@@ -728,9 +757,6 @@ static void skin_setdata(DisplayState *ds)
 static void skin_resize(DisplayState *ds)
 {
     // Emulated display has resized
-    //printf("skin_resize()\n");
-    // Resize our display also then...
-    //qemu_console_resize(skin->ds, skin->width, skin->height);
     skin_setdata(ds);
 }
 
@@ -838,11 +864,13 @@ static void skin_show_zooming_level(int zoom_level, int posx)
 
 static void skin_key_handler(void *opaque, int keycode)
 {
+    // printf("skin_key_handler >>\n");
     // Check if someone triggered one of our buttons
     int keyvalue = keycode & 0x7F;
     int released = keycode & 0x80;
     SkinButton* button = skin->buttons;
     while (button) {
+        //printf("skin_key_handler, button->key.keycode:%d\n", button->key.keycode);
         if ((button->key.keycode & 0x7F) == keyvalue) {
             int state = skin_button_handle_key(&button->key, !released);
             if (skin_draw_button(skin, button, state)) {
@@ -877,9 +905,26 @@ static void skin_key_handler(void *opaque, int keycode)
                 }
             }
             // Check if rotation button is pressed (test-code)
+            // Use it to send keycodes to MeeGo handset, need update to sensor event later
             if (button->key.keycode == 67 && released) {
-                if (skin->rotation_req == on) skin->rotation_req = off;
-                else skin->rotation_req = on;
+                if (skin->rotation_req == on) {
+                    skin->rotation_req = off;
+                    kbd_put_keycode(29);
+                    kbd_put_keycode(42);
+                    kbd_put_keycode(19);
+                    kbd_put_keycode(147);
+                    kbd_put_keycode(170);
+                    kbd_put_keycode(157);                       
+                }
+                else {
+                    skin->rotation_req = on;
+                    kbd_put_keycode(56);
+                    kbd_put_keycode(42);
+                    kbd_put_keycode(19);
+                    kbd_put_keycode(170);
+                    kbd_put_keycode(147);
+                    kbd_put_keycode(184);                       
+                }
             }
             
             // Zoom buttons
@@ -900,6 +945,20 @@ static void skin_key_handler(void *opaque, int keycode)
                     skin_handle_zooming();
                     skin_show_zooming_level(zoom_factor, button->image.posx);
                 }
+            }
+            // Zoom buttons
+            if (button->key.keycode == 66 && released) { // F8
+                // Actual size of the skin
+                if (zoom_factor < ZOOM_MAX_FACTOR) {
+                    zoom_factor = 100;
+                    no_keyboard_anim = 1;
+                    skin_handle_zooming();
+                    skin_show_zooming_level(zoom_factor, button->image.posx);
+                }
+            }
+            if (button->key.keycode == 65 && released) { // F7
+                // Shutdown qemu system
+                qemu_system_shutdown_request();
             }
         }
         button = button->next;
@@ -965,7 +1024,6 @@ DisplayState *graphic_console_init(vga_hw_update_ptr update,
         da->resize_displaysurface = skin_resize_displaysurface;
         da->free_displaysurface = skin_free_displaysurface;
         ds->allocator = da;
-        //printf("%s, es->width=%d, es->height=%d\n", __FUNCTION__, skin->es->width, skin->es->height);
         ds->surface = skin_create_displaysurface(skin->es->width, skin->es->height);
         // Client DisplayState, which is the actual screen we are emulating
         skin->es->ds = ds;

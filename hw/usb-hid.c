@@ -626,6 +626,7 @@ static void usb_keyboard_handle_reset(USBDevice *dev)
 {
     USBHIDState *s = (USBHIDState *)dev;
 
+    printf("usb_keyboard_handle_rest: enter\n");
     qemu_add_kbd_event_handler(usb_keyboard_event, s);
     s->protocol = 1;
 }

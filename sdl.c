@@ -37,6 +37,7 @@
 static DisplayChangeListener *dcl;
 static SDL_Surface *real_screen;
 static SDL_Surface *guest_screen = NULL;
+static SDL_Surface *emulator_screen = NULL;
 static int gui_grab; /* if true, all keyboard/mouse events are grabbed */
 static int last_vm_running;
 static int gui_saved_grab;
@@ -67,33 +68,42 @@ static int host_display_height;
 extern DisplayState *es_ds;
 extern int es_posx;
 extern int es_posy;
+extern int rotation;
 #endif
 
 static void sdl_update(DisplayState *ds, int x, int y, int w, int h)
 {
-    //    printf("updating x=%d y=%d w=%d h=%d\n", x, y, w, h);
-    SDL_Rect rec, rec_src;
-
-#ifdef CONFIG_SKINNING
-    rec_src.x = x - es_posx;
-    rec_src.y = y - es_posy;
-    rec_src.w = w;
-    rec_src.h = h;
-#else
-    rec_src.x = x;
-    rec_src.y = y;
-    rec_src.w = w;
-    rec_src.h = h;
-#endif
+    SDL_Rect rec, rec_gs, rec_es;
+    //printf("sdl_update: updating x=%d y=%d w=%d h=%d\n", x, y, w, h);
     rec.x = x;
     rec.y = y;
     rec.w = w;
     rec.h = h;
 
-    if (guest_screen && rec_src.x >= 0 && rec_src.y >= 0) {
+    if (es_ds) {
+        rec_gs.x = es_posx;
+        rec_gs.y = es_posy;
+        rec_gs.w = ds_get_width(es_ds);
+        rec_gs.h = ds_get_height(es_ds);
+
+        rec_es.x = 0;
+        rec_es.y = 0;
+        rec_es.w = ds_get_width(es_ds);
+        rec_es.h = ds_get_height(es_ds);
+
+        //printf("sdl_update: es_posx:%d, es_posy:%d\n", es_posx, es_posy);
+    
+        if (!rotation) {
+            SDL_BlitSurface(emulator_screen, &rec_es, guest_screen, &rec_gs);
+        }
+    }
+    
+    if (guest_screen) {
         if (!scaling_active) {
-            SDL_BlitSurface(guest_screen, &rec_src, real_screen, &rec);
+            SDL_BlitSurface(guest_screen, &rec, real_screen, &rec);
         } else {
+            //printf("sdl_update: guest_screen->w:%d, guest_screen->h:%d, real_sceeen->w:%d, real_screen->h:%d\n",
+            //     guest_screen->w, guest_screen->h, real_screen->w, real_screen->h);
             if (sdl_zoom_blit(guest_screen, real_screen, SMOOTHING_ON, &rec) < 0) {
                 fprintf(stderr, "Zoom blit failed\n");
                 exit(1);
@@ -110,10 +120,16 @@ static void sdl_setdata(DisplayState *ds)
     rec.y = 0;
     rec.w = real_screen->w;
     rec.h = real_screen->h;
-
+    
 #ifdef CONFIG_SKINNING    
-    if (es_ds)
-        ds = es_ds;
+    if (es_ds) {
+        //printf("sdl_setdata: ds:%p, es_ds:%p\n", ds, es_ds);
+        if (emulator_screen != NULL) SDL_FreeSurface(emulator_screen);
+        emulator_screen = SDL_CreateRGBSurfaceFrom(ds_get_data(es_ds), ds_get_width(es_ds), ds_get_height(es_ds),
+                                                   ds_get_bits_per_pixel(es_ds), ds_get_linesize(es_ds),
+                                                   es_ds->surface->pf.rmask, es_ds->surface->pf.gmask,
+                                                   es_ds->surface->pf.bmask, es_ds->surface->pf.amask);
+    }
 #endif
     
     if (guest_screen != NULL) SDL_FreeSurface(guest_screen);
@@ -132,8 +148,8 @@ static void do_sdl_resize(int new_width, int new_height, int bpp)
     //    printf("resizing to %d %d\n", w, h);
 
     // jun: disable MeeGo screen resizable
-    //flags = SDL_HWSURFACE|SDL_ASYNCBLIT|SDL_HWACCEL|SDL_RESIZABLE;
     flags = SDL_HWSURFACE|SDL_ASYNCBLIT|SDL_HWACCEL;
+    //flags = SDL_HWSURFACE|SDL_ASYNCBLIT|SDL_HWACCEL|SDL_RESIZABLE;
 #ifndef CONFIG_SKINNING
 	//flags |= SDL_RESIZABLE;
 #endif
@@ -145,7 +161,8 @@ static void do_sdl_resize(int new_width, int new_height, int bpp)
     width = new_width;
     height = new_height;
     real_screen = SDL_SetVideoMode(width, height, bpp, flags);
-    if (!real_screen) {
+    //printf("do_sdl_resize: real_screen:%p, width:%d, height:%d\n", real_screen, width, height);
+    if (!real_screen){ 
         fprintf(stderr, "Could not open SDL display\n");
         exit(1);
     }

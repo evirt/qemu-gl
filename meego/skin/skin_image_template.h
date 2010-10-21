@@ -42,7 +42,8 @@ static inline void glue(skin_rotate_buffer_bytes_,PIXEL_DST)
             // Destination pixel (portrait orientation)
             dstpixel = (DST_TYPE*)(ds_get_data(skin->ds) + 
                             (skin->es->posy + x + px) * ds_get_linesize(skin->ds) +
-                            (skin->es->posx + skin->es->height - (y+py)) *
+                                   (skin->es->posx + skin->es->height - (y+py)) *
+                                   //(skin->es->posx + 480 - (y+py)) *
                                 ds_get_bytes_per_pixel(skin->ds));
             // Copy the pixel data
             *dstpixel = *srcpixel;
@@ -103,7 +104,7 @@ static inline int glue(skin_draw_image_from_a24_to_,PIXEL_DST)
         return 1;
     }
     else {
-        printf("That wouldn't fit!\n");
+        // printf("That wouldn't fit!\n");
     }
     return 0;
 }
