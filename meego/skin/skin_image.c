@@ -17,9 +17,9 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
-#include "qemu-common.h"
+/* #include "qemu-common.h" */
 #ifndef CONFIG_COCOA
-#define PNG_SKIP_SETJMP_CHECK
+/* #define PNG_SKIP_SETJMP_CHECK */
 #include <png.h>
 #endif
 

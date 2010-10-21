@@ -43,16 +43,17 @@
 #include <mesa_gl.h>
 #include <mesa_glx.h>
 
-#include "exec.h"
+//#include "exec.h"
 
 #include "opengl_func.h"
+#include "opengl_process.h"
 
 #include "mesa_glu.h"
 #include "mesa_mipmap.c"
 
-#include "../qemu-common.h"
+//#include "../qemu-common.h"
 
-#include "opengl_process.h"
+//#include "opengl_process.h"
 
 #define FAKE_GL_VENDOR     "Qemu"
 #define FAKE_GL_RENDERER   "VMGL Passthrough"

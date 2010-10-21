@@ -27,6 +27,14 @@
 #include "mesa_gl.h"
 #include "mesa_glext.h"
 
+#ifdef TARGET_X86_64
+#define TARGET_LONG_BITS 64
+#else
+#define TARGET_LONG_BITS 32
+#endif
+
+#include "cpu-defs.h"
+
 /* Argument list are internally of a type that can hold a target pointer
  * or a host pointer.  */
 typedef target_phys_addr_t arg_t;
