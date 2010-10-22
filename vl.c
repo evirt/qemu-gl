@@ -4298,6 +4298,7 @@ typedef struct QEMUOption {
     int index;
 } QEMUOption;
 
+
 static const QEMUOption qemu_options[] = {
     { "h", 0, QEMU_OPTION_h },
 #define DEF(option, opt_arg, opt_enum, opt_help)        \
@@ -5509,13 +5510,9 @@ int main(int argc, char **argv, char **envp)
                 kvm_allowed = 1;
                 break;
 #endif
-#ifdef TARGET_OPENGL_OK
-            case QEMU_OPTION_enable_gl:
-                enable_gl = 1;
-                break;
-#else
-#error oops! no GL
-#endif
+             case QEMU_OPTION_enable_gl:
+                 enable_gl = 1;
+                 break;
             case QEMU_OPTION_usb:
                 usb_enabled = 1;
                 break;

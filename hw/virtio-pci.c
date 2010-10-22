@@ -543,6 +543,7 @@ static int virtio_balloon_init_pci(PCIDevice *pci_dev)
     return 0;
 }
 
+#ifdef CONFIG_GL
 static int virtio_gl_init_pci(PCIDevice *pci_dev)
 {
     VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
@@ -554,10 +555,9 @@ static int virtio_gl_init_pci(PCIDevice *pci_dev)
                     PCI_DEVICE_ID_VIRTIO_GL,
                     PCI_CLASS_OTHERS,
                     0x00);
-//    proxy->host_features |= 1 << VIRTIO_RING_F_INDIRECT_DESC;
-
     return 0;
 }
+#endif
 
 static PCIDeviceInfo virtio_info[] = {
     {
@@ -601,16 +601,17 @@ static PCIDeviceInfo virtio_info[] = {
         .exit      = virtio_exit_pci,
         .qdev.reset = virtio_pci_reset,
     },{
-	.qdev.name = "virtio-gl-pci",
+#ifdef CONFIG_GL
+        .qdev.name = "virtio-gl-pci",
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_gl_init_pci,
         .exit      = virtio_exit_pci,
         .qdev.props = (Property[]) {
-//            DEFINE_RNG_PROPERTIES(VirtIOPCIProxy, rng),
             DEFINE_PROP_END_OF_LIST(),
         },
         .qdev.reset = virtio_pci_reset,
     },{
+#endif
         /* end of list */
     }
 };

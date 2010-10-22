@@ -1,6 +1,8 @@
 /*
- *  Copyright (c) 2010 Intel Corporation
- *  Written by:
+ *  Copyright (c) 2006,2007 Even Rouault
+ *
+ *  Modified by:
+ *    Gordon Williams <gordon.williams@collabora.co.uk>
  *    Ian Molton <ian.molton@collabora.co.uk>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -17,17 +19,17 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
  * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISiNG FROM,
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
 
-typedef struct {
-    int process_id;
-    int wordsize;
-    int rq_l, rrq_l;
-    int sum; // Debugging only
-    char *rq, *rq_p;
-    char *rrq, *rrq_p;
-} ProcessStruct;
+
+#include <sys/types.h>
+
+extern void gl_disconnect(ProcessStruct *process);
+extern ProcessStruct *vmgl_get_process(pid_t pid);
+extern void vmgl_context_switch(ProcessStruct *process, int switch_gl_context);
+extern int do_function_call(ProcessStruct *process, int func_number,
+                            arg_t *args, char *ret_string);
 

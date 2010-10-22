@@ -59,8 +59,6 @@ static uint8_t allocator;
 static SDL_PixelFormat host_format;
 static int scaling_active = 0;
 
-extern void opengl_exec_set_parent_window(Display* _dpy, Window _parent_window);
-
 #ifdef CONFIG_SKINNING
 void skin_toggle_full_screen(DisplayState *ds);
 static int host_display_width;
@@ -143,9 +141,7 @@ static void sdl_setdata(DisplayState *ds)
 
 static void do_sdl_resize(int new_width, int new_height, int bpp)
 {
-    SDL_SysWMinfo info;
     int flags;
-    static Display *dpy;
 
     //    printf("resizing to %d %d\n", w, h);
 
@@ -169,16 +165,6 @@ static void do_sdl_resize(int new_width, int new_height, int bpp)
         exit(1);
     }
 
-    SDL_VERSION(&info.version);
-    if(!SDL_GetWMInfo(&info)) {
-	fprintf(stderr, "SDL fail\n");
-	exit(1);
-    }
-    if (info.subsystem == SDL_SYSWM_X11 && info.info.x11.display &&
-                    (!dpy || dpy == info.info.x11.display)) {
-        dpy = info.info.x11.display;
-        opengl_exec_set_parent_window(dpy, info.info.x11.window);
-    }
 }
 
 static void sdl_resize(DisplayState *ds)
@@ -927,7 +913,6 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
 {
     int flags;
     uint8_t data = 0;
-    SDL_SysWMinfo info;
     DisplayAllocator *da;
     const SDL_VideoInfo *vi;
 
@@ -951,17 +936,6 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
         exit(1);
     }
 
-    // FIXMEIM - likely un-needed - sdl_create_display_surface also does this.
-    SDL_VERSION(&info.version);
-    if(!SDL_GetWMInfo(&info)) {
-	fprintf(stderr, "SDL fail\n");
-	exit(1);
-    }
-    if (info.subsystem == SDL_SYSWM_X11 && info.info.x11.display) {
-        opengl_exec_set_parent_window(info.info.x11.display,
-                        RootWindow(info.info.x11.display,
-                                DefaultScreen(info.info.x11.display)));
-	}
 
     vi = SDL_GetVideoInfo();
     host_format = *(vi->vfmt);

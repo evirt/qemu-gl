@@ -26,10 +26,16 @@
 
 #include "hw.h"
 #include "virtio.h"
+
+typedef target_phys_addr_t arg_t;
+#include "opengl_process.h"
+#include "opengl_exec.h"
 #include <sys/time.h>
 
-int decode_call_int(int pid, char *in_args, int args_len, char *r_buffer);
+int decode_call_int(ProcessStruct *p, char *in_args, int args_len, char *r_buffer);
 
+/* Uncomment to enable debugging - WARNING!!! changes ABI! */
+//#define DEBUG_GLIO
 
 typedef struct VirtIOGL
 {
@@ -37,64 +43,132 @@ typedef struct VirtIOGL
     VirtQueue *vq;
 } VirtIOGL;
 
-#define SIZE_OUT_HEADER (4*3)
+struct d_hdr
+{
+    int pid;
+    int rq_l;
+    int rrq_l;
+#ifdef DEBUG_GLIO
+    int sum;
+#endif
+};
+
+#define SIZE_OUT_HEADER sizeof(struct d_hdr)
+
+#ifdef DEBUG_GLIO
+#define SIZE_IN_HEADER (4*2)
+#else
 #define SIZE_IN_HEADER 4
+#endif
 
 static void virtio_gl_handle(VirtIODevice *vdev, VirtQueue *vq)
 {
     VirtQueueElement elem;
+    int nkill = 1;
 
     while(virtqueue_pop(vq, &elem)) {
-        int i;
-        int length = ((int*)elem.out_sg[0].iov_base)[1];
-        int r_length = ((int*)elem.out_sg[0].iov_base)[2];
-	int ret = 0;
-        char *buffer, *ptr;
-        char *r_buffer = NULL;
-	int *i_buffer;
+        struct d_hdr *hdr = (struct d_hdr*)elem.out_sg[0].iov_base;
+        ProcessStruct *process;
+        int i, remain;
+        int ret = 0;
 
-	if(length < SIZE_OUT_HEADER || r_length < SIZE_IN_HEADER)
-		goto done;
+if(!elem.out_num) {
+fprintf(stderr, "Bad packet\n");
+goto done;
+}
 
-	buffer = malloc(length);
-        r_buffer = malloc(r_length);
-	ptr = buffer;
-        i_buffer = (int*)buffer;
+process = vmgl_get_process(hdr->pid);
 
-        i = 0;
-        while(length){
-            int next = length;
-            if(next > elem.out_sg[i].iov_len)
-                next = elem.out_sg[i].iov_len;
-            memcpy(ptr, (char *)elem.out_sg[i].iov_base, next);
-            ptr += next;
-            ret += next;
-            i++;
-            length -= next;
+        if(hdr->rq_l) {
+
+            if(hdr->rrq_l) {
+                if(process->rq) {  // Usually only the quit packet...
+                    free(process->rq);
+                    free(process->rrq);
+                }
+                process->rq  = process->rq_p  = qemu_malloc(hdr->rq_l);
+                process->rrq = process->rrq_p = qemu_malloc(hdr->rrq_l);
+                process->rq_l  = hdr->rq_l - SIZE_OUT_HEADER;
+                process->rrq_l = hdr->rrq_l;
+#ifdef DEBUG_GLIO
+                process->sum = hdr->sum;
+#endif
+            }
+
+            i = 0;
+            remain = process->rq_l - (process->rq_p - process->rq);
+            while(remain && i < elem.out_num){
+                char *src = (char *)elem.out_sg[i].iov_base;
+                int ilen = elem.out_sg[i].iov_len;
+                int len = remain;
+
+                if(i == 0) {
+                    src += SIZE_OUT_HEADER;
+                    ilen -= SIZE_OUT_HEADER;
+                }
+
+                if(len > ilen)
+                    len = ilen;
+
+                memcpy(process->rq_p, src, len);
+                process->rq_p += len;
+                remain -= len;
+                i++;
+            }
+
+            if(process->rq_p >= process->rq + process->rq_l) {
+
+#ifdef DEBUG_GLIO
+            int sum = 0;
+            for(i = 0; i < process->rq_l ; i++)
+                sum += process->rq[i];
+            if(sum != process->sum)
+                fprintf(stderr, "Checksum fail\n");
+#endif
+
+                *(int*)process->rrq = nkill = decode_call_int(process, 
+                                process->rq,      /* command_buffer */
+                                process->rq_l,    /* cmd buffer length */
+                                process->rrq + SIZE_IN_HEADER);    /* return buffer */
+
+                qemu_free(process->rq);
+                process->rq = NULL;
+
+#ifdef DEBUG_GLIO
+                sum = 0;
+                for(i = SIZE_IN_BUFFER; i < process->rrq_l ; i++)
+                    sum += process->rrq[i];
+                *(int*)(process->rrq+sizeof(int)) = sum;
+#endif
+
+            }
         }
 
-        *(int*)r_buffer = decode_call_int(i_buffer[0], /* pid */
-                        buffer + SIZE_OUT_HEADER, /* command_buffer */
-                        i_buffer[1] - SIZE_OUT_HEADER, /* cmd buffer length */
-                        r_buffer + SIZE_IN_HEADER);    /* return buffer */
+        if(hdr->rrq_l && process->rq == NULL) {
 
-        free(buffer);
+            i = 0;
+            remain = process->rrq_l - (process->rrq_p - process->rrq);
+            while(remain && i < elem.in_num) {
+                char *dst = elem.in_sg[i].iov_base;
+                int len = remain;
+                int ilen = elem.in_sg[i].iov_len;
 
-	if(r_length)
-		ret = r_length;
-        i = 0;
-        ptr = r_buffer;
-        while(r_length) {
-            int next = r_length;
-            if(next > elem.in_sg[i].iov_len)
-                next = elem.in_sg[i].iov_len;
-            memcpy(elem.in_sg[i].iov_base, ptr, next);
-            ptr += next;
-            r_length -= next;
-            i++;
-        }
+                if(len > ilen)
+                    len = ilen;
 
-        free(r_buffer);
+                memcpy(dst, process->rrq_p, len);
+                process->rrq_p += len;
+                remain -= len;
+                ret += len;
+                i++;
+            }
+
+            if(remain <= 0) {
+                qemu_free(process->rrq);
+                if(!nkill)
+                    gl_disconnect(process);
+            }
+       }
 done:
         virtqueue_push(vq, &elem, ret);
 
@@ -128,9 +202,8 @@ static int virtio_gl_load(QEMUFile *f, void *opaque, int version_id)
 VirtIODevice *virtio_gl_init(DeviceState *dev)
 {
     VirtIOGL *s;
-    s = (VirtIOGL *)virtio_common_init("virtio-gl",
-                                            VIRTIO_ID_GL,
-                                            0, sizeof(VirtIOGL));
+    s = (VirtIOGL *)virtio_common_init("virtio-gl", VIRTIO_ID_GL,
+                                       0, sizeof(VirtIOGL));
 
     if (!s)
         return NULL;
