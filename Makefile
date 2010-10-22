@@ -275,7 +275,7 @@ KEYMAPS=da     en-gb  et  fr     fr-ch  is  lt  modifiers  no  pt-br  sv \
 ar      de     en-us  fi  fr-be  hr     it  lv  nl         pl  ru     th \
 common  de-ch  es     fo  fr-ca  hu     ja  mk  nl-be      pt  sl     tr
 
-SKINFILES=background.png background_p.png font.png plus.png minus.png rotate.png skin.xml
+SKINFILES=background.png background_p.png font.png plus.png minus.png rotate.png actual.png poweroff.png skin_clean.xml skin.xml
 
 ifdef INSTALL_BLOBS
 BLOBS=bios.bin vgabios.bin vgabios-cirrus.bin ppc_rom.bin \
@@ -320,6 +320,10 @@ endif
 	$(INSTALL_DIR) "$(DESTDIR)$(datadir)/meego/skin/aava"
 	set -e; for x in $(SKINFILES); do \
 		$(INSTALL_DATA) $(SRC_PATH)/meego/skin/aava/$$x "$(DESTDIR)$(datadir)/meego/skin/aava"; \
+	done
+	$(INSTALL_DIR) "$(DESTDIR)$(datadir)/meego/skin/handset"
+	set -e; for x in $(SKINFILES); do \
+		$(INSTALL_DATA) $(SRC_PATH)/meego/skin/handset/$$x "$(DESTDIR)$(datadir)/meego/skin/handset"; \
 	done
 
 # various test targets
