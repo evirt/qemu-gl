@@ -2606,7 +2606,7 @@ if test "$target_softmmu" = "yes" ; then
       if test "$mingw32" = "yes" ; then
         echo "LIBS+=-lopengl32 -lglu32" >> $config_host_mak
       else
-        echo "LIBS+=-lGL -lGLU -lXcomposite" >> $config_host_mak
+        echo "LIBS+=-lGL -lGLU -lXcomposite -ldl" >> $config_host_mak
       fi
     fi
   ;;
