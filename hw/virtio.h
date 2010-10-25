@@ -175,7 +175,6 @@ VirtIODevice *virtio_blk_init(DeviceState *dev, DriveInfo *dinfo);
 VirtIODevice *virtio_net_init(DeviceState *dev, NICConf *conf);
 VirtIODevice *virtio_console_init(DeviceState *dev);
 VirtIODevice *virtio_balloon_init(DeviceState *dev);
-VirtIODevice *virtio_gl_init(DeviceState *dev);
 
 VirtIODevice *virtio_gl_init(DeviceState *dev);
 
