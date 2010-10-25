@@ -257,8 +257,13 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     XMapWindow(glo.dpy, surface->window);
     XCompositeRedirectWindow (glo.dpy, surface->window, CompositeRedirectAutomatic);
 
-    if(glo.use_ximage)
+    if(glo.use_ximage) {
         surface->pixmap = XCompositeNameWindowPixmap(glo.dpy, surface->window);
+    } else {
+        surface->pixmap = XCreatePixmap( glo.dpy, DefaultRootWindow(glo.dpy),
+                                         width, height,
+                                         glo_flags_get_bytes_per_pixel(context->formatFlags)*8);
+    }
 
     if(surface->pixmap == 0) {
         fprintf(stderr, "Failed to allocate pixmap!\n");
