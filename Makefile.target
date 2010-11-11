@@ -86,7 +86,12 @@ op_helper.o cpu-exec.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 
+ifdef CONFIG_DEBUG_EXEC
+GL_CFLAGS := -Wall -g -O0 -fno-strict-aliasing
+else
 GL_CFLAGS := -Wall -g -O2 -fno-strict-aliasing
+endif
+
 parse_gl_h: parse_gl_h.c
 	$(HOST_CC) -g -o $@ $<
 server_stub.c: parse_gl_h
