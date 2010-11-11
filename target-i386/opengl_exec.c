@@ -34,7 +34,7 @@
 /* GW: dyngen-exec.h defines its own version of stuff that is in stdio.h - 
    only it misses things and is mildly different to stdio \o/. Hence
    don't include stdio and make our own defines. */
-
+#define DEBUG_GL
 #ifdef DEBUG_GL
 #ifdef _WIN32
 #define DEBUGF(...) printf(__VA_ARGS__)
@@ -165,7 +165,7 @@ static void *get_glu_ptr(const char *name)
         ptr_func_##funcname = (type(*)args_decl)get_glu_ptr(#funcname); \
     }
 
-int display_function_call = 0;
+int display_function_call = 1;
 extern int kill_process;
 
 typedef struct {
@@ -1898,7 +1898,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
             for (i = 0; i < size; i++) {
                 tab_prog[i] = ((GLcharARB *) args[2]) + acc_length;
-                acc_length += tab_length[i];
+                acc_length += (tab_length[i] + 1);
             }
             ptr_func_glShaderSource(args[0], args[1], tab_prog, tab_length);
             qemu_free(tab_prog);
