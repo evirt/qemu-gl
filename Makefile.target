@@ -77,23 +77,6 @@ op_helper.o cpu-exec.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 
-GL_CFLAGS := -Wall -g -O0 -fno-strict-aliasing
-parse_gl_h: parse_gl_h.c
-	$(HOST_CC) -g -o $@ $<
-server_stub.c: parse_gl_h
-	./parse_gl_h 2>/dev/null
-gl_func.h: parse_gl_h
-	./parse_gl_h 2>/dev/null
-opengl_func.h: gl_func.h
-helper_opengl.o: helper_opengl.c opengl_func.h server_stub.c opengl_process.h
-	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
-gl_beginend.h: $(TARGET_PATH)/beginend_funcs.sh
-	$< > $@
-mesa_mipmap.o : mesa_mipmap.c
-	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
-opengl_exec.o : opengl_exec.c server_stub.c opengl_func.h gl_beginend.h opengl_process.h mesa_mipmap.o
-	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
-
 #########################################################
 # Linux user emulator target
 
@@ -188,7 +171,6 @@ obj-$(CONFIG_VIRTIO_PCI) += virtio-pci.o
 obj-y += vhost_net.o
 obj-$(CONFIG_VHOST_NET) += vhost.o
 obj-$(CONFIG_VIRTFS) += virtio-9p.o
-obj-$(CONFIG_GL) += virtio-gl.o helper_opengl.o opengl_exec.o mesa_mipmap.o gloffscreen_common.o gloffscreen_xcomposite.o gloffscreen_wgl.o
 
 obj-y += rwhandler.o
 obj-$(CONFIG_KVM) += kvm.o kvm-all.o
@@ -221,6 +203,7 @@ obj-i386-y += vmmouse.o vmport.o hpet.o applesmc.o
 obj-i386-y += device-hotplug.o pci-hotplug.o smbios.o wdt_ib700.o
 obj-i386-y += debugcon.o multiboot.o
 obj-i386-y += pc_piix.o
+obj-i386-$(CONFIG_GL) += virtio-gl.o helper_opengl.o opengl_exec.o mesa_mipmap.o gloffscreen_common.o gloffscreen_xcomposite.o gloffscreen_wgl.o
 
 # shared objects
 obj-ppc-y = ppc.o
@@ -327,6 +310,36 @@ obj-y += $(addprefix ../, $(common-obj-y))
 obj-y += $(addprefix ../libdis/, $(libdis-y))
 obj-y += $(libobj-y)
 obj-y += $(addprefix $(HWDIR)/, $(hw-obj-y))
+
+ifeq ($(TARGET_BASE_ARCH), i386)
+ifdef CONFIG_GL
+GL_CFLAGS := $(QEMU_CFLAGS) -Wall -g -O2 -fno-strict-aliasing
+parse_gl_h: parse_gl_h.c
+	$(HOST_CC) -g -o $@ $<
+server_stub.c: parse_gl_h
+	./parse_gl_h 2>/dev/null
+gl_func.h: parse_gl_h
+	./parse_gl_h 2>/dev/null
+opengl_func.h: gl_func.h
+helper_opengl.o: helper_opengl.c opengl_func.h server_stub.c opengl_process.h
+	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
+gl_beginend.h: $(TARGET_PATH)/beginend_funcs.sh
+	$< > $@
+mesa_mipmap.o : mesa_mipmap.c
+	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
+opengl_exec.o : opengl_exec.c server_stub.c opengl_func.h gl_beginend.h opengl_process.h mesa_mipmap.o
+	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
+ifdef CONFIG_WIN32
+LIBS+=-lopengl32 -lglu32
+else
+ifdef CONFIG_COCOA
+LIBS+=-framework OpenGL -framework AGL
+else
+LIBS+=-lGL -lGLU -lXcomposite
+endif # CONFIG_WIN32
+endif # CONFIG_COCOA
+endif # CONFIG_GL
+endif # TARGET_BASE_ARCH==i386
 
 endif # CONFIG_SOFTMMU
 
