@@ -28,8 +28,8 @@
 #include "virtio.h"
 
 typedef target_phys_addr_t arg_t;
-#include "opengl_process.h"
-#include "opengl_exec.h"
+#include "gl/opengl_process.h"
+#include "gl/opengl_exec.h"
 #include <sys/time.h>
 
 int decode_call_int(ProcessStruct *p, char *in_args, int args_len, char *r_buffer);

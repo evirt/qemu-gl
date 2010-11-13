@@ -535,7 +535,7 @@ static const char* ignore_func[] =
 
 void get_func_dealt_by_hand()
 {
-  FILE* f = fopen("../target-i386/gl_func_perso.h", "r");
+  FILE* f = fopen("../gl/gl_func_perso.h", "r");
   char buffer[256];
   int i = 0;
   char* c;
@@ -1135,14 +1135,14 @@ int main(int argc, char* argv[])
   int funcDescCount = 0;
   FILE* f;
 
-  f = fopen("../target-i386/mesa_gl.h", "r");
+  f = fopen("../gl/mesa_gl.h", "r");
   assert(f);
   /*if (!f)
     f = fopen("/usr/include/GL/gl.h", "r");*/
   funcDescCount = parse(f, funcDesc, 0, 1);
   fclose(f);
 
-  f = fopen("../target-i386/mesa_glext.h", "r");
+  f = fopen("../gl/mesa_glext.h", "r");
   assert(f);
   /*if (!f)
     f = fopen("/usr/include/GL/glext.h", "r");*/
@@ -1150,7 +1150,7 @@ int main(int argc, char* argv[])
   fclose(f);
 
   FILE* header = fopen("gl_func.h", "w");
-  FILE* client_stub = fopen("client_stub.c", "w");
+//  FILE* client_stub = fopen("../gl/client_stub.c", "w");
   FILE* server_stub = fopen("server_stub.c", "w");
 
   fprintf(header, "/* This is a generated file by parse_gl_h.c - DO NOT EDIT ! */\n\n");
@@ -1165,7 +1165,7 @@ int main(int argc, char* argv[])
   fprintf(header, "enum {\n"
                   "#include \"gl_func_perso.h\"\n");
 
-  fprintf(client_stub, "/* This is a generated file by parse_gl_h.c - DO NOT EDIT ! */\n\n");
+//  fprintf(client_stub, "/* This is a generated file by parse_gl_h.c - DO NOT EDIT ! */\n\n");
 
   fprintf(server_stub, "/* This is a generated file by parse_gl_h.c - DO NOT EDIT ! */\n\n");
 
@@ -1304,6 +1304,7 @@ int main(int argc, char* argv[])
       fprintf(header, "};\n");
 
 
+#if 0
       if (funcDesc[i].just_for_server_side == 0)
       {
         if (isExt(&funcDesc[i]))
@@ -1391,6 +1392,7 @@ int main(int argc, char* argv[])
         }
         fprintf(client_stub, "}\n\n");
       }
+#endif
 
       fprintf(server_stub, "    case %s_func:\n", funcDesc[i].name);
       fprintf(server_stub, "    {\n");
@@ -1496,7 +1498,7 @@ int main(int argc, char* argv[])
 
   fclose(header);
   fclose(server_stub);
-  fclose(client_stub);
+//  fclose(client_stub);
 
   return 0;
 }
