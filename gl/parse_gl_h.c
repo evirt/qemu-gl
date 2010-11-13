@@ -1104,6 +1104,13 @@ int is_arg_of_length_depending_on_previous_args(FuncDesc* funcDesc, int j)
 static void fprintf_prototype_args(FILE* f, FuncDesc* funcDesc)
 {
   int j;
+
+  if(funcDesc->nargs == 0)
+  {
+    fprintf(f, "void");
+    return;
+  }
+
   for(j=0;j<funcDesc->nargs;j++)
   {
     if (j != 0) fprintf(f,", ");

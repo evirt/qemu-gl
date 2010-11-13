@@ -7273,8 +7273,8 @@ typedef void (APIENTRYP PFNGLCLEARCOLORIUIEXTPROC) (GLuint red, GLuint green, GL
 }
 #endif
 
-#endif
-
-
 /* ERO */
 GLAPI void GLAPIENTRY fake_gluBuild2DMipmaps (GLenum target, GLint internalFormat, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *data);
+
+#endif
+

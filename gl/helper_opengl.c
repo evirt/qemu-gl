@@ -53,7 +53,7 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int args_len, char *r_buffer)
 {
     Signature *signature;
-    int i, ret;
+    int i, ret = 0;
     char *argptr, *tmp;
     static arg_t args[50];
     int func_number;
@@ -198,6 +198,8 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
 #define GLINIT_FAIL_ABI 3
 #define GLINIT_QUEUE 2
 #define GLINIT_NOQUEUE 1
+
+int decode_call_int(ProcessStruct *process, char *in_args, int args_len, char *r_buffer);
 
 int decode_call_int(ProcessStruct *process, char *in_args, int args_len, char *r_buffer)
 {

@@ -30,9 +30,7 @@
 #include "mesa_gl.h"
 #include "mesa_glext.h"
 
-#define NEED_CPU_H
 #include "exec.h"  // For arg_t typedef
-#undef NEED_CPU_H
 
 /* Argument list are internally of a type that can hold a target pointer
  * or a host pointer.  */

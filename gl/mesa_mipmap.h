@@ -22,3 +22,7 @@ extern GLint GLAPIENTRY
 mesa_gluBuild2DMipmaps(GLenum target, GLint components,
                   GLsizei width, GLsizei height, GLenum format,
                   GLenum type, const void *data);
+extern GLint GLAPIENTRY
+mesa_gluBuild1DMipmaps(GLenum target, GLint components,
+                  GLsizei width, GLenum format,
+                  GLenum type, const void *data);

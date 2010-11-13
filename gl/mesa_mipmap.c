@@ -20,6 +20,7 @@
  */
 
 #include "mesa_glu.h"
+#include "mesa_mipmap.h"
 
 #ifdef PC_HEADER
 #include "all.h"

@@ -55,6 +55,7 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 #include "opengl_process.h"
 #include "range_alloc.h"
 #include "gloffscreen.h"
+#include "opengl_exec.h"
 
 
 /** Misc X11/GLX defines - we don't want to include the whole files for these
@@ -101,10 +102,6 @@ const GLXFBConfig FBCONFIGS[] = {
 #define FAKE_GLX_VERSION_STRING "1.2"
 #define FAKE_GLX_VERSION_MAJOR 1
 #define FAKE_GLX_VERSION_MINOR 2
-
-void *qemu_malloc(size_t size);
-void *qemu_realloc(void *ptr, size_t size);
-void qemu_free(void *ptr);
 
 #define glGetError() 0
 
@@ -326,7 +323,7 @@ static const char *glx_ext_supported[] = {
     0
 };
 
-static char *supported_glx_extensions() {
+static char *supported_glx_extensions(void) {
     static char *supported;
 
     if(!supported)
@@ -460,7 +457,7 @@ static const char *gl_ext_supported[] = {
     0
 };
 
-static char *compute_gl_extensions() {
+static char *compute_gl_extensions(void) {
     static char *supported;
 
     if(!supported)
@@ -526,7 +523,7 @@ static inline void resize_surface(ProcessState *process, QGloSurface *qsurface,
 }
 
 
-void init_process_tab()
+static void init_process_tab(void)
 {
     memset(processes, 0, sizeof(processes));
 }
@@ -540,6 +537,7 @@ void init_process_tab()
 #define ARG_TO_FLOAT(x)               (*(float*)&(x))
 #define ARG_TO_DOUBLE(x)              (*(double*)(x))
 
+void execute_func(int func_number, arg_t *args, union gl_ret_type *pret);
 #include "server_stub.c"
 
 //typedef void *ClientGLXDrawable;
@@ -627,7 +625,7 @@ static int get_server_list(ProcessState *process, unsigned int client_list)
     return server_list;
 }
 
-const GLXFBConfig *get_fbconfig(ProcessState *process, int client_fbconfig)
+static const GLXFBConfig *get_fbconfig(ProcessState *process, int client_fbconfig)
 {
     int i;
     int nbtotal = 0;
@@ -847,7 +845,7 @@ static GLuint translate_id(GLsizei n, GLenum type, const GLvoid *list)
     }
 }
 
-GLState *_create_context(ProcessState *process, int fake_ctxt, int fake_shareList)
+static GLState *_create_context(ProcessState *process, int fake_ctxt, int fake_shareList)
 {
     // FIXMEIM - realloc? really?
     process->glstates = qemu_realloc(process->glstates,
@@ -889,7 +887,7 @@ GLState *_create_context(ProcessState *process, int fake_ctxt, int fake_shareLis
     return process->glstates[process->nb_states-1];
 }
 
-GLState *get_glstate_for_fake_ctxt(ProcessState *process, int fake_ctxt)
+static GLState *get_glstate_for_fake_ctxt(ProcessState *process, int fake_ctxt)
 {
     int i;
     for (i = 0; i < process->nb_states; i++)
@@ -898,8 +896,9 @@ GLState *get_glstate_for_fake_ctxt(ProcessState *process, int fake_ctxt)
     return 0;
 }
 
-void gl_disconnect(ProcessState *process)
+void gl_disconnect(ProcessStruct *process_st)
 {
+    ProcessState *process = (ProcessState *)process_st;
     int i;
     for (i = 0; i < process->nb_states; i++) {
         destroy_gl_state(process->glstates[i]);
@@ -970,8 +969,9 @@ void vmgl_context_switch(ProcessStruct *p, int switch_gl_context)
     }
 }
 
-int do_function_call(ProcessState *process, int func_number, arg_t *args, char *ret_string)
+int do_function_call(ProcessStruct *process_st, int func_number, arg_t *args, char *ret_string)
 {
+    ProcessState *process = (ProcessState *)process_st;
     union gl_ret_type ret;
 
     Signature *signature = (Signature *) tab_opengl_calls[func_number];
