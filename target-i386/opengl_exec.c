@@ -1898,7 +1898,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
 
             for (i = 0; i < size; i++) {
                 tab_prog[i] = ((GLcharARB *) args[2]) + acc_length;
-                acc_length += (tab_length[i] + 1);
+                acc_length += tab_length[i];
             }
             ptr_func_glShaderSource(args[0], args[1], tab_prog, tab_length);
             qemu_free(tab_prog);
