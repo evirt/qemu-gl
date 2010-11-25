@@ -17,7 +17,11 @@ static FILE *dec_input_data_f = NULL;
 const char *input_arg_header = "                                              \
 \n/* This file is generated automatically                                     \
 \n * to reproduce problem caused by gl call sequence                          \
-\n * forwarded from qemu client OS                                            \
+\n * forwarded from qemu client OS.                                           \
+\n * Locations pointed by data pointers from gl function calls are stored     \
+\n * here.                                                                    \
+\n * Data are resumed to be *little* endian.                                  \
+\n *                                                                          \
 \n */                                                                         \
 \n";
 
@@ -101,21 +105,14 @@ void log_decoding_input (ProcessStruct *process, char *in_args, int args_len)
     }
     ++ decoding_count;
     // start to record inputs.
-    fprintf (dec_input_f, "    process = vmgl_get_process(pid_%d);\n", decoding_count);
-    fprintf (dec_input_f, "    decode_call_int ((ProcessStruct *)process, in_args_%d, args_len_%d, r_buffer);\n", decoding_count, decoding_count);
+    fprintf (dec_input_f, "    process = vmgl_get_process(%d);\n", process->process_id);
+    fprintf (dec_input_f, "    decode_call_int ((ProcessStruct *)process, in_args_%d, %d, r_buffer);\n", decoding_count, args_len);
     fprintf (dec_input_data_f, "//arguments for function %d\n", decoding_count);
-    // process
-    fprintf (dec_input_data_f, "int pid_%d=%d;\n", decoding_count, process->process_id);
-    //int proc_size = sizeof (ProcessStruct);
-    //fprintf (dec_input_data_f, "char process_%d[%d]={\n", decoding_count, proc_size);
-    //dump_data (dec_input_data_f, (unsigned char *)process, proc_size);
-    //fprintf (dec_input_data_f, "};\n");
+
     // in_args
     fprintf (dec_input_data_f, "char in_args_%d[%d]={\n", decoding_count, args_len);
     dump_data (dec_input_data_f, (unsigned char *)in_args, args_len);
     fprintf (dec_input_data_f, "};\n");
-    // args_len
-    fprintf (dec_input_data_f, "int args_len_%d=%d;\n", decoding_count, args_len);
 }
 
 void log_decoding_output (char *r_buffer)
