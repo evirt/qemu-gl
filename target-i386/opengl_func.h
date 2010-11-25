@@ -32,13 +32,16 @@
 
 #ifdef TARGET_X86_64
 #define TARGET_LONG_BITS 64
+#define TARGET_PHYS_ADDR_BITS 64
 #else
 #define TARGET_LONG_BITS 32
+#define TARGET_PHYS_ADDR_BITS 32
 #endif
 
-#define NEED_CPU_H
-#include "exec.h"  // For arg_t typedef
-#undef NEED_CPU_H
+//#define NEED_CPU_H
+//#include "exec.h"  // For arg_t typedef
+//#undef NEED_CPU_H
+#include "targphys.h"
 
 /* Argument list are internally of a type that can hold a target pointer
  * or a host pointer.  */

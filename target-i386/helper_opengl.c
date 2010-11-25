@@ -30,11 +30,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "osdep.h"
 #include "opengl_func.h"
 #include "opengl_process.h"
 #include "opengl_exec.h"
 
-#include "kvm.h"
+//#include "kvm.h"
 
 #ifdef _WIN32
 #define DEBUGF(...) printf(__VA_ARGS__)
@@ -42,6 +43,10 @@
 extern struct FILE *stderr;		/* Standard error output stream.  */
 #define DEBUGF(...) fprintf(stderr, __VA_ARGS__)
 #endif
+
+extern int decoding_log_enabled (void);
+extern void log_decoding_input (ProcessStruct *process, char *in_args, int args_len);
+extern void log_decoding_output (char *r_buffer);
 
 /* do_decode_call_int()
  *
@@ -205,6 +210,9 @@ int decode_call_int(ProcessStruct *process, char *in_args, int args_len, char *r
     int ret;
     int first_func = *(short*)in_args;
 
+    if (decoding_log_enabled ()) {
+        log_decoding_input (process, in_args, args_len);
+    }
     /* Select the appropriate context for this pid if it isnt already active
      * Note: if we're about to execute glXMakeCurrent() then we tell the
      * renderer not to waste its time switching contexts
@@ -246,6 +254,10 @@ int decode_call_int(ProcessStruct *process, char *in_args, int args_len, char *r
 
     if(!ret)
         cur_process = NULL;
-
+#if 0
+    if (decoding_log_enabled ()) {
+        log_decoding_output (ret);
+    }
+#endif
     return ret;
 }

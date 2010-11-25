@@ -184,7 +184,7 @@ obj-y = vl.o async.o monitor.o pci.o pci_host.o pcie_host.o machine.o gdbstub.o
 # need to fix this properly
 obj-y += virtio-blk.o virtio-balloon.o virtio-net.o virtio-console.o virtio-pci.o
 
-obj-$(CONFIG_GL) += virtio-gl.o helper_opengl.o opengl_exec.o mesa_mipmap.o gloffscreen_common.o gloffscreen_xcomposite.o gloffscreen_wgl.o
+obj-$(CONFIG_GL) += virtio-gl.o helper_opengl.o opengl_exec.o mesa_mipmap.o gloffscreen_common.o gloffscreen_xcomposite.o gloffscreen_wgl.o log_gl_passingthrough.o
  
 obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 obj-$(CONFIG_ISA_MMIO) += isa_mmio.o

@@ -4883,6 +4883,13 @@ static int virtcon_parse(const char *devname)
     return 0;
 }
 
+//#define GL_LOGGING
+
+#ifdef GL_LOGGING
+extern void enable_decoding_log (void);
+extern  void log_finalize (void);
+#endif
+
 int main(int argc, char **argv, char **envp)
 {
     const char *gdbstub_dev = NULL;
@@ -4975,6 +4982,9 @@ int main(int argc, char **argv, char **envp)
     autostart= 1;
 
     optind = 1;
+#ifdef GL_LOGGING
+    enable_decoding_log ();
+#endif
     for(;;) {
         if (optind >= argc)
             break;
@@ -6207,5 +6217,8 @@ int main(int argc, char **argv, char **envp)
     quit_timers();
     net_cleanup();
 
+#ifdef GL_LOGGING
+    log_finalize ();
+#endif
     return 0;
 }

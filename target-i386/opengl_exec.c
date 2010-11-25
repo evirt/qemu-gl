@@ -31,6 +31,8 @@
 #include <string.h>
 #include <sys/types.h> // for pid_t
 
+#include "qemu-common.h"
+
 /* GW: dyngen-exec.h defines its own version of stuff that is in stdio.h - 
    only it misses things and is mildly different to stdio \o/. Hence
    don't include stdio and make our own defines. */
@@ -39,7 +41,7 @@
 #ifdef _WIN32
 #define DEBUGF(...) printf(__VA_ARGS__)
 #else
-extern struct FILE *stderr;		/* Standard error output stream.  */
+//extern struct FILE *stderr;		/* Standard error output stream.  */
 #define DEBUGF(...) fprintf(stderr, __VA_ARGS__)
 #endif
 #else
@@ -50,6 +52,7 @@ extern struct FILE *stderr;		/* Standard error output stream.  */
 #define GLX_GLXEXT_PROTOTYPES
 #include <mesa_gl.h>
 
+#include "qemu-queue.h"
 #include "opengl_func.h"
 #include "mesa_mipmap.h"
 #include "opengl_process.h"
@@ -165,7 +168,7 @@ static void *get_glu_ptr(const char *name)
         ptr_func_##funcname = (type(*)args_decl)get_glu_ptr(#funcname); \
     }
 
-int display_function_call = 1;
+int display_function_call = 0;
 extern int kill_process;
 
 typedef struct {
