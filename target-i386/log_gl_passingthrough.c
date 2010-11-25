@@ -42,7 +42,7 @@ const char *input_log_header = "                                              \
 \n";
 
 const char *input_log_tail = "                                                \
-}                                                                             \
+\n}                                                                           \
 \n";
 
 void log_initialize (void)
