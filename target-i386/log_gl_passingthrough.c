@@ -83,7 +83,7 @@ void log_finalize (void)
     }
 }
 
-static void dump_data (FILE *fp, unsigned char *buf, int size, int dump_as_askii, int dump_as_comment)
+static void dump_data (FILE *fp, unsigned char *buf, int size, int dump_as_askii)
 {
     unsigned char *ptr = buf;
     int i;
@@ -92,7 +92,9 @@ static void dump_data (FILE *fp, unsigned char *buf, int size, int dump_as_askii
         return;
     }
 
+    // begining of a line
     fprintf (fp, "    ");
+
     for (i = 0; i < size - 1; ++ i) {
         if (dump_as_askii) {
             fprintf (fp, "%c, ", *ptr);
@@ -101,11 +103,7 @@ static void dump_data (FILE *fp, unsigned char *buf, int size, int dump_as_askii
         }
         ptr ++;
         if (((i+1) & 0xf) == 0) {
-            if (dump_as_comment) {
-                fprintf (fp, "\n//    ");
-            } else {
-                fprintf (fp, "\n    ");
-            }
+            fprintf (fp, "\n    ");
         }
     }
 
@@ -131,12 +129,14 @@ void log_decoding_input (ProcessStruct *process, char *in_args, int args_len)
     fprintf (dec_input_data_f, "//arguments for function %d\n", decoding_count);
 
     // dump in arguments as askii code and for reference.
-    fprintf (dec_input_data_f, "//char in_args_%d[%d]={\n", decoding_count, args_len);
-    dump_data (dec_input_data_f, (unsigned char *)in_args, args_len, 1, 1);
+    fprintf (dec_input_data_f, "#if 0\n");
+    fprintf (dec_input_data_f, "char in_args_%d[%d]={\n", decoding_count, args_len);
+    dump_data (dec_input_data_f, (unsigned char *)in_args, args_len, 1);
     fprintf (dec_input_data_f, "};\n");
+    fprintf (dec_input_data_f, "#endif\n");
     // in_args
     fprintf (dec_input_data_f, "char in_args_%d[%d]={\n", decoding_count, args_len);
-    dump_data (dec_input_data_f, (unsigned char *)in_args, args_len, 0, 0);
+    dump_data (dec_input_data_f, (unsigned char *)in_args, args_len, 0);
     fprintf (dec_input_data_f, "};\n");
 }
 
