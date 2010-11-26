@@ -95,9 +95,9 @@ static void dump_data (FILE *fp, unsigned char *buf, int size, int dump_as_askii
     fprintf (fp, "    ");
     for (i = 0; i < size - 1; ++ i) {
         if (dump_as_askii) {
-            fprintf (fp, "0x%x%x, ", *ptr >> 4, *ptr & 0xf);
-        } else {
             fprintf (fp, "%c, ", *ptr);
+        } else {
+            fprintf (fp, "0x%x%x, ", *ptr >> 4, *ptr & 0xf);
         }
         ptr ++;
         if (((i+1) & 0xf) == 0) {
