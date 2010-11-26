@@ -125,7 +125,7 @@ void log_decoding_input (ProcessStruct *process, char *in_args, int args_len)
     }
     ++ decoding_count;
     // start to record inputs.
-    fprintf (dec_input_f, "    gl_passingthrough_call (%d, in_args_%d, %d);\n", process->process_id, decoding_count, args_len);
+    fprintf (dec_input_f, "    gl_passingthrough_call (%d, in_args_%d, %d);\t\t//%s\n", process->process_id, decoding_count, args_len, tab_opengl_calls_name[func_number]);
     fprintf (dec_input_data_f, "//arguments for function %d\n", decoding_count);
 
     // dump in arguments as askii code and for reference.
