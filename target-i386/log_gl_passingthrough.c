@@ -37,10 +37,12 @@ const char *input_log_header = "                                              \
 \n#include \"decoding_input_arguments.h\"                                     \
 \n// temporary buffer to hold the return value. Need to make sure it will not \
 \n// overflow.                                                                \
+\nextern int show_offscr_window;                                              \
 \nstatic char r_buffer[4096*4096];                                            \
 \nint main ()                                                                 \
 \n{                                                                           \
 \n    ProcessStruct *process;                                                 \
+\n    show_offscr_window = 1;                                                 \
 \n    disable_decoding_log ();                                                \
 \n    // start the opengl call                                                \
 \n";
