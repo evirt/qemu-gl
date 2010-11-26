@@ -39,6 +39,14 @@ const char *input_log_header = "                                              \
 \n// overflow.                                                                \
 \nextern int show_offscr_window;                                              \
 \nstatic char r_buffer[4096*4096];                                            \
+\n                                                                            \
+\ninline void gl_passingthrough_call (int process_id, char *in_arg,           \
+\n                                    int in_arg_length)                      \
+\n{                                                                           \
+\n    ProcessStruct *process = vmgl_get_process (process_id);                 \
+\n    decode_call_int (process, in_arg, in_arg_length, r_buffer);             \
+\n}                                                                           \
+\n                                                                            \
 \nint main ()                                                                 \
 \n{                                                                           \
 \n    ProcessStruct *process;                                                 \
@@ -107,8 +115,7 @@ void log_decoding_input (ProcessStruct *process, char *in_args, int args_len)
     }
     ++ decoding_count;
     // start to record inputs.
-    fprintf (dec_input_f, "    process = vmgl_get_process(%d);\n", process->process_id);
-    fprintf (dec_input_f, "    decode_call_int ((ProcessStruct *)process, in_args_%d, %d, r_buffer);\n", decoding_count, args_len);
+    fprintf (dec_input_f, "    gl_passingthrough_call (%d, in_args_%d, %d);\n", process->process_id, decoding_count, args_len);
     fprintf (dec_input_data_f, "//arguments for function %d\n", decoding_count);
 
     // in_args
