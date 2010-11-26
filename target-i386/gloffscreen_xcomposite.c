@@ -49,7 +49,9 @@ struct GloMain {
     int use_ximage;
 };
 struct GloMain glo;
+
 int glo_inited = 0;
+int show_offscr_window = 0;
 
 struct _GloContext {
     GLuint                formatFlags;
@@ -247,7 +249,11 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     mask = CWBackPixel | CWBorderPixel | CWColormap | CWEventMask |
            CWOverrideRedirect | CWSaveUnder;
 
-    surface->window = XCreateWindow(glo.dpy, DefaultRootWindow(glo.dpy), -width-1000, 0, width, height, 0, vis->depth, InputOutput, vis->visual, mask, &attr);
+    if (show_offscr_window) {
+        surface->window = XCreateWindow(glo.dpy, DefaultRootWindow(glo.dpy), 0, 0, width, height, 0, vis->depth, InputOutput, vis->visual, mask, &attr);
+    } else {
+        surface->window = XCreateWindow(glo.dpy, DefaultRootWindow(glo.dpy), -width-1000, 0, width, height, 0, vis->depth, InputOutput, vis->visual, mask, &attr);
+    }
 
     if (!surface->window) {
         printf( "XCreateWindow failed\n" );
@@ -255,7 +261,9 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     }
 
     XMapWindow(glo.dpy, surface->window);
-    XCompositeRedirectWindow (glo.dpy, surface->window, CompositeRedirectAutomatic);
+    if (!show_offscr_window) {
+        XCompositeRedirectWindow (glo.dpy, surface->window, CompositeRedirectAutomatic);
+    }
 
     if(glo.use_ximage) {
         surface->pixmap = XCompositeNameWindowPixmap(glo.dpy, surface->window);
@@ -289,7 +297,7 @@ GloSurface *glo_surface_create(int width, int height, GloContext *context) {
     XSync(glo.dpy, 0);
 
     // If we're using XImages to pull the data from the graphics card...
-    glo_surface_try_alloc_xshm_image(surface);
+    //glo_surface_try_alloc_xshm_image(surface);
 
     return surface;
 }
@@ -323,6 +331,21 @@ int glo_surface_makecurrent(GloSurface *surface) {
 }
 
 /* Get the contents of the given surface */
+void sync_up_glo_window (GloSurface *surface, void *data) {
+
+    if (!surface)
+        return;
+
+    char* buf = malloc(4 * surface->width * surface->height);
+    memcpy (buf, data, 4 * surface->width * surface->height);
+    XImage* img = XCreateImage(glo.dpy, 0, 24, ZPixmap, 0, buf, surface->width, surface->height, 8, 0);
+    GC gc = DefaultGC(glo.dpy, DefaultScreen(glo.dpy));
+    XPutImage (glo.dpy, surface->window, gc, img, 0, 0, 0, 0, surface->width, surface->height);
+    XDestroyImage(img);
+
+    return;
+}
+
 void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *data) {
     static int once;
     XImage *img;
@@ -372,7 +395,6 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
             // If we're not using Shm
             if(!surface->image)
                 XDestroyImage(img);
-
             return;  // We're done.
         } 
     // Uh oh... better fallback. Perhaps get glo.use_ximage to 0?
@@ -382,7 +404,11 @@ void glo_surface_getcontents(GloSurface *surface, int stride, int bpp, void *dat
     glo_surface_getcontents_readpixels(surface->context->formatFlags,
                                        stride, bpp, surface->width,
                                        surface->height, data);
+    if (show_offscr_window) {
+        sync_up_glo_window (surface, data);
+    }
 }
+
 
 /* Return the width and height of the given surface */
 void glo_surface_get_size(GloSurface *surface, int *width, int *height) {
@@ -470,9 +496,14 @@ static int glo_can_readback(void) {
 }
 
 static void glo_test_readback_methods(void) {
-    glo.use_ximage = 1;
-    if(!glo_can_readback())
+    if (show_offscr_window) {
+        // in that case, always use glReadPixel fall back.
         glo.use_ximage = 0;
+    } else {
+        glo.use_ximage = 1;
+        if(!glo_can_readback())
+            glo.use_ximage = 0;
+    }
 
     fprintf(stderr, "VM GL: Using %s readback\n", glo.use_ximage?"XImage":"glReadPixels");
 }
