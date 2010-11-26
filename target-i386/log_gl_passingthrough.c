@@ -59,6 +59,11 @@ const char *input_log_tail = "                                                \
 \n}                                                                           \
 \n";
 
+static inline int is_string_arguments (int func_number)
+{
+    return ((func_number == glShaderSource_fake_func));
+}
+
 void log_initialize (void)
 {
     dec_input_f = fopen("/tmp/gloffscreen_test.c", "w");
@@ -83,6 +88,19 @@ void log_finalize (void)
     }
 }
 
+static void print_askii_char (FILE *fp, unsigned char chr)
+{
+    if ((chr >= 0x20) && (chr <= 0x7e)) {
+        fprintf (fp, "%c", chr);
+    } else if (chr == 0) {
+        fprintf (fp, "\'\\0\'");
+    } else if (chr == 0x0a) {
+        fprintf (fp, "\'\\n\'");
+    } else {
+        fprintf (fp, "0x%x%x ", chr >> 4, chr & 0xf);
+    }
+}
+
 static void dump_data (FILE *fp, unsigned char *buf, int size, int dump_as_askii)
 {
     unsigned char *ptr = buf;
@@ -93,22 +111,24 @@ static void dump_data (FILE *fp, unsigned char *buf, int size, int dump_as_askii
     }
 
     // begining of a line
-    fprintf (fp, "    ");
+    if (!dump_as_askii) {
+        fprintf (fp, "    ");
+    }
 
     for (i = 0; i < size - 1; ++ i) {
         if (dump_as_askii) {
-            fprintf (fp, "%c, ", *ptr);
+            print_askii_char (fp, *ptr);
         } else {
             fprintf (fp, "0x%x%x, ", *ptr >> 4, *ptr & 0xf);
         }
         ptr ++;
-        if (((i+1) & 0xf) == 0) {
+        if (!dump_as_askii && (((i+1) & 0xf) == 0)) {
             fprintf (fp, "\n    ");
         }
     }
 
     if (dump_as_askii) {
-        fprintf (fp, "%c, ", *ptr);
+        print_askii_char (fp, *ptr);
     } else {
         fprintf (fp, "0x%x%x", *ptr >> 4, *ptr &0xf);
     }
@@ -129,11 +149,13 @@ void log_decoding_input (ProcessStruct *process, char *in_args, int args_len)
     fprintf (dec_input_data_f, "//arguments for function %d\n", decoding_count);
 
     // dump in arguments as askii code and for reference.
-    fprintf (dec_input_data_f, "#if 0\n");
-    fprintf (dec_input_data_f, "char in_args_%d[%d]={\n", decoding_count, args_len);
-    dump_data (dec_input_data_f, (unsigned char *)in_args, args_len, 1);
-    fprintf (dec_input_data_f, "};\n");
-    fprintf (dec_input_data_f, "#endif\n");
+    if (is_string_arguments (func_number)) {
+        fprintf (dec_input_data_f, "#if 0\n");
+        fprintf (dec_input_data_f, "char in_args_%d[%d]={\n", decoding_count, args_len);
+        dump_data (dec_input_data_f, (unsigned char *)in_args, args_len, 1);
+        fprintf (dec_input_data_f, "};\n");
+        fprintf (dec_input_data_f, "#endif\n");
+    }
     // in_args
     fprintf (dec_input_data_f, "char in_args_%d[%d]={\n", decoding_count, args_len);
     dump_data (dec_input_data_f, (unsigned char *)in_args, args_len, 0);
