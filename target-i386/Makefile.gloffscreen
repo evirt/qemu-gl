@@ -1,6 +1,7 @@
 obj-qemu-required = ../qemu-malloc.o
 obj-gl = helper_opengl.o opengl_exec.o mesa_mipmap.o gloffscreen_common.o gloffscreen_xcomposite.o gloffscreen_wgl.o gloffscreen_test.o log_gl_passingthrough.o
 
+CFLAGS := -g -O0
 GL_CFLAGS := -Wall -g -O0 -fno-strict-aliasing
 #GL_CFLAGS := -Wall -g -O2 -fno-strict-aliasing
 
