@@ -22,6 +22,7 @@ const char *input_arg_header = "                                              \
 \n * here.                                                                    \
 \n * Data are resumed to be *little* endian.                                  \
 \n *                                                                          \
+\n * In args format: func_number (2 bytes) [arg_size (4 bytes) + arg] *       \
 \n */                                                                         \
 \n";
 
