@@ -31,4 +31,6 @@ log_gl_passingthrough.o : log_gl_passingthrough.c
 	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
 $(PROG): $(obj-qemu-required) $(obj-gl)
 	$(CC) -o $(PROG) $(obj-qemu-required) $(obj-gl) -lGL -ldl -lXcomposite
+clean:
+	rm $(obj-gl) parse_gl_h server_stub.c gl_func.h
 
