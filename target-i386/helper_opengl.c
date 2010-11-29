@@ -190,9 +190,11 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
 
     switch(signature->ret_type) {
         case TYPE_INT:
+        case TYPE_UNSIGNED_INT:
             memcpy(r_buffer, &ret, sizeof(int));
             break;
         case TYPE_CHAR:
+        case TYPE_UNSIGNED_CHAR:
             *r_buffer = ret & 0xff;
             break;
     }
