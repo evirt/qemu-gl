@@ -83,6 +83,12 @@ int glo_initialised(void) {
     return glo_inited;
 }
 
+static int x_errhandler(Display *dpy, XErrorEvent *e)
+{
+    fprintf (stderr, "X Error Happened!\n");
+    return 0;
+}
+
 /* Initialise gloffscreen */
 void glo_init(void) {
     if (glo_inited) {
@@ -99,7 +105,8 @@ void glo_init(void) {
 
     glo_inited = 1; // safe because we are single threaded. Otherwise we cause
                     // recursion on the next call.
-
+    // set the X error handler.
+    XErrorHandler old_handler = XSetErrorHandler (x_errhandler);
     glo_test_readback_methods();
 }
 
