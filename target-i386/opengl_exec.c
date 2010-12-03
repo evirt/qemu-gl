@@ -1094,7 +1094,7 @@ int do_function_call(ProcessState *process, int func_number, arg_t *args, char *
             int visualid = (int) args[1];
             int fake_shareList = (int) args[2];
 
-            if (1 || display_function_call)
+            if (display_function_call)
                 DEBUGF( "visualid=%d, fake_shareList=%d\n", visualid,
                         fake_shareList);
 
