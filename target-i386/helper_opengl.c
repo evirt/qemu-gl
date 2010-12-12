@@ -198,6 +198,7 @@ static inline int do_decode_call_int(ProcessStruct *process, void *args_in, int 
             *r_buffer = ret & 0xff;
             break;
         case TYPE_CONST_CHAR:
+        case TYPE_NONE:
             break;
         default:
            DEBUGF("Unsupported GL API return type %i!\n", signature->ret_type);
