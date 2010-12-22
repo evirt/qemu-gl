@@ -4,7 +4,13 @@ obj-gl = helper_opengl.o opengl_exec.o mesa_mipmap.o gloffscreen_common.o gloffs
 CFLAGS := -g -O0
 GL_CFLAGS := -Wall -g -O0 -fno-strict-aliasing
 #GL_CFLAGS := -Wall -g -O2 -fno-strict-aliasing
-
+ifeq ($(shell uname),Linux)
+# Linux
+LDFLAGS := -lGL -ldl -lXcomposite
+else
+# Windows
+LDFLAGS := -lmingw32 -lopengl32 -mwindows
+endif
 TARGET_PATH=./
 
 PROG=gloffscreen
@@ -20,8 +26,7 @@ gl_func.h: parse_gl_h
 opengl_func.h: gl_func.h
 helper_opengl.o: helper_opengl.c opengl_func.h server_stub.c opengl_process.h
 	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
-#gl_beginend.h: $(TARGET_PATH)/beginend_funcs.sh
-gl_beginend.h: ./beginend_funcs.sh
+gl_beginend.h: $(TARGET_PATH)/beginend_funcs.sh
 	$< > $@
 mesa_mipmap.o : mesa_mipmap.c
 	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
@@ -30,7 +35,7 @@ opengl_exec.o : opengl_exec.c server_stub.c opengl_func.h gl_beginend.h opengl_p
 log_gl_passingthrough.o : log_gl_passingthrough.c
 	$(CC) $(GL_CFLAGS) $(DEFINES) -c -o $@ $< -I.. -I. -I../fpu -I$(TARGET_PATH)
 $(PROG): $(obj-qemu-required) $(obj-gl)
-	$(CC) -o $(PROG) $(obj-qemu-required) $(obj-gl) -lGL -ldl -lXcomposite
+	$(CC) -o $(PROG) $(LDFLAGS) $(obj-qemu-required) $(obj-gl)
 clean:
 	rm $(obj-gl) parse_gl_h server_stub.c gl_func.h
 
